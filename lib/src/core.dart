@@ -134,14 +134,18 @@ abstract mixin class RouteTarget extends Object {
     _resultValue = result;
   }
 
+  /// Checks if this route is equal to another route.
+  ///
   /// Two routes are equal if they have the same runtime type and navigation path.
-  @override
-  operator ==(Object other) {
+  bool equals(Object other) {
     if (identical(this, other)) return true;
     return (other is RouteTarget) &&
         other.runtimeType == runtimeType &&
         other._path == _path;
   }
+
+  @override
+  operator ==(Object other) => equals(other);
 
   @override
   int get hashCode =>
