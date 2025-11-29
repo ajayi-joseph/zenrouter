@@ -214,7 +214,7 @@ class IdeaDetail extends HomeTabShell with RouteBuilder, RouteDeepLink {
       appBar: AppBar(title: const Text('Idea Detail')),
       body: Center(
         child: Column(
-          mainAxisSize: .min,
+          mainAxisSize: MainAxisSize.min,
           children: [
             Text('Idea Detail for $id'),
             ElevatedButton(
