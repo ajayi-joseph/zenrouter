@@ -133,8 +133,11 @@ abstract mixin class RouteTarget extends Object {
     if (_path?.stack.contains(this) == true) {
       _path!.remove(this);
     }
+    onDidPop(result);
     _resultValue = result;
   }
+
+  void onDidPop(dynamic result) {}
 
   /// Checks if this route is equal to another route.
   ///
@@ -162,7 +165,7 @@ abstract mixin class RouteTarget extends Object {
   /// Return `null` if this route should not be accessible via deep links.
   ///
   /// If this route has [RouteRedirect], the redirect will be followed first.
-  /// [RouteShellHost] routes should return `null`.
+  /// [RouteHost] routes should return `null`.
   ///
   /// Example:
   /// ```dart
@@ -179,7 +182,7 @@ abstract mixin class RouteTarget extends Object {
       }
     }
 
-    if (this is RouteShellHost) return null;
+    if (this is RouteHost) return null;
 
     assert(
       false,

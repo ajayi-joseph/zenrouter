@@ -1,0 +1,620 @@
+import 'package:flutter/material.dart';
+import 'package:zenrouter/zenrouter.dart';
+import 'package:zenrouter_devtools/zenrouter_devtools.dart';
+
+// ============================================================================
+// Main App Entry Point
+// ============================================================================
+
+void main() {
+  runApp(const MyApp());
+}
+
+final appCoordinator = AppCoordinator();
+
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp.router(
+      title: 'ZenRouter Nested Routes Example',
+      routerDelegate: appCoordinator.routerDelegate,
+      routeInformationParser: appCoordinator.routeInformationParser,
+      theme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
+        useMaterial3: true,
+      ),
+    );
+  }
+}
+
+// ============================================================================
+// Route Definitions
+// ============================================================================
+
+/// Base route class for all app routes
+abstract class AppRoute extends RouteTarget with RouteUnique {}
+
+/// Root host route - uses NavigatorStack for full-page navigation
+class RootHost extends AppRoute with RouteDestinationMixin, RouteHost {
+  static final instance = RootHost();
+
+  @override
+  RouteHost? get host => null;
+
+  @override
+  NavigationPath get path => appCoordinator.root;
+
+  @override
+  HostType get hostType => HostType.navigatorStack;
+
+  @override
+  Uri? toUri() => Uri.parse('/');
+}
+
+/// Home host - uses NavigatorStack for nested navigation within home
+class HomeHost extends AppRoute
+    with RouteDestinationMixin, RouteHost<AppRoute> {
+  static final instance = HomeHost();
+
+  @override
+  RouteHost? get host => RootHost.instance;
+
+  @override
+  NavigationPath get path => appCoordinator.homeStack;
+
+  @override
+  HostType get hostType => HostType.navigatorStack;
+
+  @override
+  Uri? toUri() => Uri.parse('/home');
+
+  @override
+  Widget build(AppCoordinator coordinator, BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Home'), backgroundColor: Colors.blue),
+      body: HostType.buildNavigationStack(coordinator, coordinator.homeStack),
+    );
+  }
+}
+
+/// Tab bar shell - uses Custom (IndexedStack) for tab navigation
+class TabBarHost extends AppRoute
+    with RouteDestinationMixin, RouteHost<AppRoute> {
+  static final instance = TabBarHost();
+
+  @override
+  RouteHost? get host => HomeHost.instance;
+
+  @override
+  NavigationPath get path => appCoordinator.tabIndexed;
+
+  @override
+  HostType get hostType => HostType.manualStack;
+
+  @override
+  Uri? toUri() => Uri.parse('/home/tabs');
+
+  @override
+  Widget build(AppCoordinator coordinator, BuildContext context) {
+    final path = coordinator.tabIndexed;
+    return Scaffold(
+      body: Column(
+        children: [
+          // Tab content (IndexedStack is built by RouteHostHost)
+          Expanded(child: HostType.buildIndexedStack(coordinator, path)),
+          // Tab bar
+          Container(
+            color: Colors.grey[200],
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _TabButton(
+                  label: 'Feed',
+                  isActive: path.activePathIndex == 0,
+                  onTap: () => coordinator.push(FeedTabHost()),
+                ),
+                _TabButton(
+                  label: 'Profile',
+                  isActive: path.activePathIndex == 1,
+                  onTap: () => coordinator.push(ProfileTab()),
+                ),
+                _TabButton(
+                  label: 'Settings',
+                  isActive: path.activePathIndex == 2,
+                  onTap: () => coordinator.push(SettingsTab()),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Settings shell - uses NavigatorStack for nested settings navigation
+class SettingsHost extends AppRoute
+    with RouteDestinationMixin, RouteHost<AppRoute> {
+  @override
+  RouteHost? get host => RootHost.instance;
+
+  @override
+  NavigationPath get path => appCoordinator.settingsStack;
+
+  @override
+  HostType get hostType => HostType.navigatorStack;
+
+  @override
+  Uri? toUri() => Uri.parse('/settings');
+
+  @override
+  Widget build(AppCoordinator coordinator, BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Settings')),
+      body: HostType.buildNavigationStack(
+        coordinator,
+        coordinator.settingsStack,
+      ),
+    );
+  }
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    return other is SettingsHost;
+  }
+
+  @override
+  int get hashCode => runtimeType.hashCode;
+}
+
+// ============================================================================
+// Tab Routes (belong to TabBarHost - custom host)
+// ============================================================================
+
+class FeedTabHost extends AppRoute with RouteHost<AppRoute> {
+  static final instance = FeedTabHost();
+
+  @override
+  NavigationPath get path => appCoordinator.feedTabStack;
+
+  @override
+  RouteHost? get host => TabBarHost.instance;
+
+  @override
+  HostType get hostType => HostType.navigatorStack;
+}
+
+class FeedTab extends AppRoute with RouteDestinationMixin {
+  @override
+  RouteHost? get host => FeedTabHost.instance;
+
+  @override
+  Uri? toUri() => Uri.parse('/home/tabs/feed');
+
+  @override
+  Widget build(AppCoordinator coordinator, BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        const Text(
+          'Feed',
+          style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 16),
+        _FeedItem(
+          title: 'Post 1',
+          onTap: () => coordinator.push(FeedDetail(id: '1')),
+        ),
+        _FeedItem(
+          title: 'Post 2',
+          onTap: () => coordinator.push(FeedDetail(id: '2')),
+        ),
+        _FeedItem(
+          title: 'Post 3',
+          onTap: () => coordinator.push(FeedDetail(id: '3')),
+        ),
+      ],
+    );
+  }
+}
+
+class ProfileTab extends AppRoute with RouteDestinationMixin {
+  @override
+  RouteHost? get host => TabBarHost.instance;
+
+  @override
+  Uri? toUri() => Uri.parse('/home/tabs/profile');
+
+  @override
+  Widget build(AppCoordinator coordinator, BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        const Text(
+          'Profile',
+          style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 16),
+        ElevatedButton(
+          onPressed: () => coordinator.push(ProfileDetail()),
+          child: const Text('View Profile Details'),
+        ),
+      ],
+    );
+  }
+}
+
+class SettingsTab extends AppRoute with RouteDestinationMixin {
+  @override
+  RouteHost? get host => TabBarHost.instance;
+
+  @override
+  Uri? toUri() => Uri.parse('/home/tabs/settings');
+
+  @override
+  Widget build(AppCoordinator coordinator, BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        const Text(
+          'Quick Settings',
+          style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 16),
+        ElevatedButton(
+          onPressed: () => coordinator.push(GeneralSettings()),
+          child: const Text('Go to Full Settings'),
+        ),
+      ],
+    );
+  }
+}
+
+// ============================================================================
+// Detail Routes (belong to HomeHost - navigatorStack host)
+// ============================================================================
+
+class FeedDetail extends AppRoute with RouteDestinationMixin {
+  FeedDetail({required this.id});
+
+  final String id;
+
+  @override
+  RouteHost? get host => FeedTabHost.instance;
+
+  @override
+  Uri? toUri() => Uri.parse('/home/feed/$id');
+
+  @override
+  Widget build(AppCoordinator coordinator, BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text('Feed Detail $id')),
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              'Feed Detail for Post $id',
+              style: const TextStyle(fontSize: 20),
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: () => coordinator.pop(),
+              child: const Text('Go Back'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    return other is FeedDetail && other.id == id;
+  }
+
+  @override
+  int get hashCode => id.hashCode;
+}
+
+class ProfileDetail extends AppRoute with RouteDestinationMixin {
+  @override
+  RouteHost? get host => HomeHost.instance;
+
+  @override
+  Uri? toUri() => Uri.parse('/home/profile/detail');
+
+  @override
+  Widget build(
+    covariant Coordinator<RouteUnique> coordinator,
+    BuildContext context,
+  ) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Profile Detail')),
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Text('Profile Detail Page', style: TextStyle(fontSize: 20)),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: () => coordinator.pop(),
+              child: const Text('Go Back'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ============================================================================
+// Settings Routes (belong to SettingsHost - navigatorStack host)
+// ============================================================================
+
+class GeneralSettings extends AppRoute with RouteDestinationMixin {
+  final _settingsHost = SettingsHost();
+
+  @override
+  RouteHost? get host => _settingsHost;
+
+  @override
+  Uri? toUri() => Uri.parse('/settings/general');
+
+  @override
+  Widget build(AppCoordinator coordinator, BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        const Text(
+          'General Settings',
+          style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 16),
+        ListTile(
+          title: Text('Account Settings'),
+          onTap: () => coordinator.push(AccountSettings()),
+        ),
+        ListTile(
+          title: Text('Privacy Settings'),
+          onTap: () => coordinator.push(PrivacySettings()),
+        ),
+      ],
+    );
+  }
+}
+
+class AccountSettings extends AppRoute with RouteDestinationMixin {
+  final _settingsHost = SettingsHost();
+
+  @override
+  RouteHost? get host => _settingsHost;
+
+  @override
+  Uri? toUri() => Uri.parse('/settings/account');
+
+  @override
+  Widget build(AppCoordinator coordinator, BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        const Text(
+          'Account Settings',
+          style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 16),
+        const ListTile(title: Text('Email')),
+        const ListTile(title: Text('Password')),
+        const ListTile(title: Text('Delete Account')),
+      ],
+    );
+  }
+}
+
+class PrivacySettings extends AppRoute with RouteDestinationMixin {
+  final _settingsHost = SettingsHost();
+
+  @override
+  RouteHost? get host => _settingsHost;
+
+  @override
+  Uri? toUri() => Uri.parse('/settings/privacy');
+
+  @override
+  Widget build(AppCoordinator coordinator, BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        const Text(
+          'Privacy Settings',
+          style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 16),
+        const ListTile(title: Text('Data Privacy')),
+        const ListTile(title: Text('Location Services')),
+        const ListTile(title: Text('Analytics')),
+      ],
+    );
+  }
+}
+
+// ============================================================================
+// Not Found Route
+// ============================================================================
+
+class NotFound extends AppRoute with RouteDestinationMixin {
+  NotFound({required this.uri});
+
+  final Uri uri;
+
+  @override
+  RouteHost? get host => RootHost.instance;
+
+  @override
+  Uri? toUri() => Uri.parse('/not-found');
+
+  @override
+  Widget build(AppCoordinator coordinator, BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Not Found')),
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.error_outline, size: 64, color: Colors.red),
+            const SizedBox(height: 16),
+            Text('Route not found: ${uri.path}'),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: () => coordinator.replace(HomeHost.instance),
+              child: const Text('Go Home'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ============================================================================
+// Coordinator
+// ============================================================================
+
+class AppCoordinator extends Coordinator<AppRoute> with CoordinatorDebug {
+  // Navigation paths for different shells
+  final NavigationPath<AppRoute> homeStack = NavigationPath();
+  final NavigationPath<AppRoute> settingsStack = NavigationPath();
+  final FixedNavigationPath<AppRoute> tabIndexed = FixedNavigationPath([
+    FeedTabHost.instance,
+    ProfileTab(),
+    SettingsTab(),
+  ]);
+
+  NavigationPath<AppRoute> feedTabStack = NavigationPath();
+
+  @override
+  RouteHost get rootHost => RootHost.instance;
+
+  @override
+  List<NavigationPath> get paths => [
+    root,
+    homeStack,
+    settingsStack,
+    tabIndexed,
+    feedTabStack,
+  ];
+
+  @override
+  String debugLabel(NavigationPath<RouteTarget> path) {
+    if (path == root) return 'root';
+    if (path == homeStack) return 'home';
+    if (path == settingsStack) return 'settings';
+    if (path == tabIndexed) return 'tabs';
+    if (path == feedTabStack) return 'feeds';
+    return super.debugLabel(path);
+  }
+
+  @override
+  List<AppRoute> get debugRoutes => [
+    FeedTabHost(),
+    ProfileTab(),
+    SettingsTab(),
+    FeedDetail(id: '1'),
+    ProfileDetail(),
+    GeneralSettings(),
+    AccountSettings(),
+    PrivacySettings(),
+    NotFound(uri: Uri.parse('/not-found')),
+  ];
+
+  @override
+  AppRoute parseRouteFromUri(Uri uri) {
+    return switch (uri.pathSegments) {
+      // Root - default to feed tab (hosts will be set up automatically)
+      [] => FeedTab(),
+      // Home routes - default to feed tab
+      ['home'] => FeedTab(),
+      ['home', 'tabs'] => FeedTab(), // Default to feed tab
+      ['home', 'tabs', 'feed'] => FeedTab(),
+      ['home', 'tabs', 'profile'] => ProfileTab(),
+      ['home', 'tabs', 'settings'] => SettingsTab(),
+      ['home', 'feed', final id] => FeedDetail(id: id),
+      ['home', 'profile', 'detail'] => ProfileDetail(),
+      // Settings routes - default to general settings
+      ['settings'] => GeneralSettings(),
+      ['settings', 'general'] => GeneralSettings(),
+      ['settings', 'account'] => AccountSettings(),
+      ['settings', 'privacy'] => PrivacySettings(),
+      // Not found
+      _ => NotFound(uri: uri),
+    };
+  }
+}
+
+// ============================================================================
+// Helper Widgets
+// ============================================================================
+
+class _TabButton extends StatelessWidget {
+  const _TabButton({
+    required this.label,
+    required this.isActive,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool isActive;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: InkWell(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          decoration: BoxDecoration(
+            color: isActive ? Colors.blue : Colors.transparent,
+            border: Border(
+              bottom: BorderSide(
+                color: isActive ? Colors.blue : Colors.transparent,
+                width: 2,
+              ),
+            ),
+          ),
+          child: Text(
+            label,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+              color: isActive ? Colors.white : Colors.black,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _FeedItem extends StatelessWidget {
+  const _FeedItem({required this.title, required this.onTap});
+
+  final String title;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: ListTile(
+        title: Text(title),
+        trailing: const Icon(Icons.arrow_forward),
+        onTap: onTap,
+      ),
+    );
+  }
+}

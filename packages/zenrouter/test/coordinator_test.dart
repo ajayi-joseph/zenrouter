@@ -5,7 +5,10 @@ import 'package:zenrouter/zenrouter.dart';
 
 // Test routes
 class TestCoordinator extends Coordinator<AppRoute> {
-  final shellPath = NavigationPath<ShellRoute>();
+  final shellPath = NavigationPath<AppRoute>();
+
+  @override
+  RouteHost get rootHost => RootHostRoute.instance;
 
   @override
   List<NavigationPath> get paths => [root, shellPath];
@@ -16,86 +19,137 @@ class TestCoordinator extends Coordinator<AppRoute> {
       [] => HomeRoute(),
       ['settings'] => SettingsRoute(),
       ['profile', final id] => ProfileRoute(id),
-      ['tab', 'one'] => TabOneRoute(),
-      ['tab', 'two'] => TabTwoRoute(),
+      ['shell', 'one'] => ShellChildOneRoute(),
+      ['shell', 'two'] => ShellChildTwoRoute(),
       _ => HomeRoute(),
     };
   }
 }
 
-sealed class AppRoute extends RouteTarget with RouteUnique {
+sealed class AppRoute extends RouteTarget with RouteUnique {}
+
+// Root host
+class RootHostRoute extends AppRoute with RouteHost<AppRoute> {
+  static final instance = RootHostRoute();
+
   @override
-  NavigationPath getPath(TestCoordinator coordinator) => coordinator.root;
+  RouteHost? get host => null;
+
+  @override
+  HostType get hostType => HostType.navigatorStack;
+
+  @override
+  NavigationPath get path => TestCoordinator().root;
+
+  @override
+  bool operator ==(Object other) => other is RootHostRoute;
+
+  @override
+  int get hashCode => runtimeType.hashCode;
 }
 
-class HomeRoute extends AppRoute with RouteBuilder {
-  @override
-  Uri toUri() => Uri.parse('/');
+// Shell host
+class ShellHostRoute extends AppRoute with RouteHost<AppRoute> {
+  static final instance = ShellHostRoute();
 
   @override
-  Widget build(TestCoordinator coordinator, BuildContext context) {
+  RouteHost? get host => RootHostRoute.instance;
+
+  @override
+  HostType get hostType => HostType.navigatorStack;
+
+  @override
+  NavigationPath get path => TestCoordinator().shellPath;
+
+  @override
+  Uri? toUri() => Uri.parse('/shell');
+
+  @override
+  Widget build(covariant Coordinator coordinator, BuildContext context) {
+    return const Scaffold(body: Text('Shell Host'));
+  }
+
+  @override
+  bool operator ==(Object other) => other is ShellHostRoute;
+
+  @override
+  int get hashCode => runtimeType.hashCode;
+}
+
+class HomeRoute extends AppRoute with RouteDestinationMixin {
+  @override
+  RouteHost? get host => RootHostRoute.instance;
+
+  @override
+  Uri? toUri() => Uri.parse('/');
+
+  @override
+  Widget build(covariant Coordinator coordinator, BuildContext context) {
     return const Scaffold(body: Text('Home'));
   }
 }
 
-class SettingsRoute extends AppRoute with RouteBuilder {
+class SettingsRoute extends AppRoute with RouteDestinationMixin {
   @override
-  Uri toUri() => Uri.parse('/settings');
+  RouteHost? get host => RootHostRoute.instance;
 
   @override
-  Widget build(TestCoordinator coordinator, BuildContext context) {
+  Uri? toUri() => Uri.parse('/settings');
+
+  @override
+  Widget build(covariant Coordinator coordinator, BuildContext context) {
     return const Scaffold(body: Text('Settings'));
   }
 }
 
-class ProfileRoute extends AppRoute with RouteBuilder {
+class ProfileRoute extends AppRoute with RouteDestinationMixin {
   final String userId;
   ProfileRoute(this.userId);
 
   @override
-  Uri toUri() => Uri.parse('/profile/$userId');
+  RouteHost? get host => RootHostRoute.instance;
 
   @override
-  Widget build(TestCoordinator coordinator, BuildContext context) {
+  Uri? toUri() => Uri.parse('/profile/$userId');
+
+  @override
+  Widget build(covariant Coordinator coordinator, BuildContext context) {
     return Scaffold(body: Text('Profile: $userId'));
   }
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    return other is ProfileRoute && other.userId == userId;
+  }
+
+  @override
+  int get hashCode => userId.hashCode;
 }
 
-sealed class ShellRoute extends AppRoute with RouteShell<ShellRoute> {
-  static final host = ShellHostRoute();
+class ShellChildOneRoute extends AppRoute with RouteDestinationMixin {
+  @override
+  RouteHost? get host => ShellHostRoute.instance;
 
   @override
-  ShellRoute get shellHost => host;
+  Uri? toUri() => Uri.parse('/shell/one');
 
   @override
-  NavigationPath getPath(TestCoordinator coordinator) => coordinator.shellPath;
-}
-
-class ShellHostRoute extends ShellRoute with RouteShellHost {
-  @override
-  NavigationPath getHostPath(TestCoordinator coordinator) => coordinator.root;
-
-  @override
-  Uri? toUri() => null;
-}
-
-class TabOneRoute extends ShellRoute with RouteBuilder {
-  @override
-  Uri toUri() => Uri.parse('/tab/one');
-
-  @override
-  Widget build(TestCoordinator coordinator, BuildContext context) {
-    return const Text('Tab One');
+  Widget build(covariant Coordinator coordinator, BuildContext context) {
+    return const Text('Shell Child One');
   }
 }
 
-class TabTwoRoute extends ShellRoute with RouteBuilder {
+class ShellChildTwoRoute extends AppRoute with RouteDestinationMixin {
   @override
-  Uri toUri() => Uri.parse('/tab/two');
+  RouteHost? get host => ShellHostRoute.instance;
 
   @override
-  Widget build(TestCoordinator coordinator, BuildContext context) {
-    return const Text('Tab Two');
+  Uri? toUri() => Uri.parse('/shell/two');
+
+  @override
+  Widget build(covariant Coordinator coordinator, BuildContext context) {
+    return const Text('Shell Child Two');
   }
 }
 
@@ -104,26 +158,37 @@ class RedirectRoute extends AppRoute with RouteRedirect<AppRoute> {
   RedirectRoute(this.target);
 
   @override
-  FutureOr<AppRoute> redirect() => target;
+  RouteHost? get host => RootHostRoute.instance;
+
+  @override
+  FutureOr<AppRoute?> redirect() => target;
 
   @override
   Uri? toUri() => target.toUri();
+
+  @override
+  Widget build(covariant Coordinator coordinator, BuildContext context) {
+    return const SizedBox.shrink();
+  }
 }
 
-class DeepLinkRoute extends AppRoute with RouteBuilder, RouteDeepLink {
+class DeepLinkRoute extends AppRoute with RouteDestinationMixin, RouteDeepLink {
   final String id;
   DeepLinkRoute(this.id);
 
   @override
-  Uri toUri() => Uri.parse('/deeplink/$id');
+  RouteHost? get host => RootHostRoute.instance;
 
   @override
-  Widget build(TestCoordinator coordinator, BuildContext context) {
+  Uri? toUri() => Uri.parse('/deeplink/$id');
+
+  @override
+  Widget build(covariant Coordinator coordinator, BuildContext context) {
     return Scaffold(body: Text('DeepLink: $id'));
   }
 
   @override
-  FutureOr<void> deeplinkHandler(TestCoordinator coordinator, Uri uri) {
+  FutureOr<void> deeplinkHandler(covariant Coordinator coordinator, Uri uri) {
     // Custom deep link handling
     coordinator.replace(HomeRoute());
     coordinator.push(this);
@@ -163,49 +228,50 @@ void main() {
       expect(route, isA<HomeRoute>());
     });
 
-    test('push adds route to correct path', () async {
+    test('push adds route to root path', () async {
       final coordinator = TestCoordinator();
 
-      coordinator.push(HomeRoute());
+      await coordinator.push(HomeRoute());
       await Future.delayed(Duration.zero);
 
       expect(coordinator.root.stack.length, 1);
-      expect(coordinator.root.stack.first, isA<HomeRoute>());
+      expect(coordinator.root.stack.first, isA<RootHostRoute>());
     });
 
-    test('replace clears path and adds route', () async {
+    test('replace clears all paths and adds route', () async {
       final coordinator = TestCoordinator();
 
-      coordinator.push(HomeRoute());
+      await coordinator.push(HomeRoute());
       await Future.delayed(Duration.zero);
 
       coordinator.replace(SettingsRoute());
       await Future.delayed(Duration.zero);
 
       expect(coordinator.root.stack.length, 1);
-      expect(coordinator.root.stack.first, isA<SettingsRoute>());
+      expect(coordinator.root.stack.first, isA<RootHostRoute>());
     });
 
-    test('pop removes route from active path', () async {
+    test('pop removes route from nearest dynamic path', () async {
       final coordinator = TestCoordinator();
 
-      coordinator.push(HomeRoute());
+      await coordinator.push(ShellChildOneRoute());
+      await Future.delayed(Duration.zero);
+      await coordinator.push(ShellChildTwoRoute());
       await Future.delayed(Duration.zero);
 
-      coordinator.push(SettingsRoute());
-      await Future.delayed(Duration.zero);
+      expect(coordinator.shellPath.stack.length, 2);
 
       coordinator.pop();
       await Future.delayed(Duration.zero);
 
-      expect(coordinator.root.stack.length, 1);
-      expect(coordinator.root.stack.first, isA<HomeRoute>());
+      expect(coordinator.shellPath.stack.length, 1);
+      expect(coordinator.shellPath.stack.first, isA<ShellChildOneRoute>());
     });
 
-    test('currentUri returns URI of current route', () async {
+    test('currentUri returns URI of active route', () async {
       final coordinator = TestCoordinator();
 
-      coordinator.push(SettingsRoute());
+      await coordinator.push(SettingsRoute());
       await Future.delayed(Duration.zero);
 
       expect(coordinator.currentUri.path, '/settings');
@@ -217,41 +283,51 @@ void main() {
       expect(coordinator.currentUri.path, '/');
     });
 
-    test('activePath returns root when no shell is active', () async {
+    test('nearestPath returns root when no nested navigation', () async {
       final coordinator = TestCoordinator();
 
-      coordinator.push(HomeRoute());
+      await coordinator.push(HomeRoute());
       await Future.delayed(Duration.zero);
 
-      expect(coordinator.activePath, coordinator.root);
+      // HomeRoute is in root, so nearestPath should be root
+      expect(coordinator.nearestPath, coordinator.root);
+    });
+
+    test('nearestPath returns shell path when shell route active', () async {
+      final coordinator = TestCoordinator();
+
+      await coordinator.push(ShellChildOneRoute());
+      await Future.delayed(Duration.zero);
+
+      expect(coordinator.nearestPath, coordinator.shellPath);
     });
 
     test('recoverRouteFromUri with replace strategy', () async {
       final coordinator = TestCoordinator();
 
-      coordinator.push(HomeRoute());
+      await coordinator.push(HomeRoute());
       await Future.delayed(Duration.zero);
 
       await coordinator.recoverRouteFromUri(Uri.parse('/settings'));
       await Future.delayed(Duration.zero);
 
       expect(coordinator.root.stack.length, 1);
-      expect(coordinator.root.stack.first, isA<SettingsRoute>());
+      expect(coordinator.root.stack.first, isA<RootHostRoute>());
     });
 
     test('tryPop returns true when route popped', () async {
       final coordinator = TestCoordinator();
 
-      coordinator.push(HomeRoute());
+      await coordinator.push(ShellChildOneRoute());
       await Future.delayed(Duration.zero);
 
       final result = await coordinator.tryPop();
 
       expect(result, true);
-      expect(coordinator.root.stack, isEmpty);
+      expect(coordinator.shellPath.stack, isEmpty);
     });
 
-    test('tryPop returns false when stack is empty', () async {
+    test('tryPop returns false when all stacks are empty', () async {
       final coordinator = TestCoordinator();
 
       final result = await coordinator.tryPop();
@@ -262,19 +338,19 @@ void main() {
     test('pushOrMoveToTop moves existing route to top', () async {
       final coordinator = TestCoordinator();
 
-      final home = HomeRoute();
-      final settings = SettingsRoute();
+      final one = ShellChildOneRoute();
+      final two = ShellChildTwoRoute();
 
-      coordinator.push(home);
+      await coordinator.push(one);
       await Future.delayed(Duration.zero);
-      coordinator.push(settings);
-      await Future.delayed(Duration.zero);
-
-      coordinator.pushOrMoveToTop(home);
+      await coordinator.push(two);
       await Future.delayed(Duration.zero);
 
-      expect(coordinator.root.stack.length, 2);
-      expect(coordinator.root.stack.last, home);
+      coordinator.pushOrMoveToTop(one);
+      await Future.delayed(Duration.zero);
+
+      expect(coordinator.shellPath.stack.length, 2);
+      expect(coordinator.shellPath.stack.last, one);
     });
 
     test('handles redirect in push', () async {
@@ -283,47 +359,51 @@ void main() {
       final target = SettingsRoute();
       final redirect = RedirectRoute(target);
 
-      coordinator.push(redirect);
+      await coordinator.push(redirect);
       await Future.delayed(Duration.zero);
 
+      // Should have pushed the target, not the redirect
       expect(coordinator.root.stack.length, 1);
-      expect(coordinator.root.stack.first, target);
+      expect(coordinator.root.stack.first, isA<RootHostRoute>());
     });
   });
 
-  group('Coordinator - Shell Routing', () {
-    test('pushing shell route adds shell host to root', () async {
+  group('Coordinator - Host Navigation', () {
+    test('pushing shell route sets up host in root', () async {
       final coordinator = TestCoordinator();
 
-      coordinator.push(TabOneRoute());
+      await coordinator.push(ShellChildOneRoute());
       await Future.delayed(Duration.zero);
 
       expect(coordinator.root.stack.length, 1);
       expect(coordinator.root.stack.first, isA<ShellHostRoute>());
       expect(coordinator.shellPath.stack.length, 1);
-      expect(coordinator.shellPath.stack.first, isA<TabOneRoute>());
+      expect(coordinator.shellPath.stack.first, isA<ShellChildOneRoute>());
     });
 
     test('multiple shell routes share same host', () async {
       final coordinator = TestCoordinator();
 
-      coordinator.push(TabOneRoute());
+      await coordinator.push(ShellChildOneRoute());
       await Future.delayed(Duration.zero);
 
-      coordinator.push(TabTwoRoute());
+      await coordinator.push(ShellChildTwoRoute());
       await Future.delayed(Duration.zero);
 
       expect(coordinator.root.stack.length, 1);
       expect(coordinator.shellPath.stack.length, 2);
     });
 
-    test('activePath returns shell path when shell is active', () async {
+    test('pathSegments includes host paths', () async {
       final coordinator = TestCoordinator();
 
-      coordinator.push(TabOneRoute());
+      await coordinator.push(ShellChildOneRoute());
       await Future.delayed(Duration.zero);
 
-      expect(coordinator.activePath, coordinator.shellPath);
+      final segments = coordinator.pathSegments;
+      expect(segments.length, 2);
+      expect(segments[0], coordinator.root);
+      expect(segments[1], coordinator.shellPath);
     });
   });
 
@@ -338,8 +418,7 @@ void main() {
       await Future.delayed(Duration.zero);
 
       expect(coordinator.root.stack.length, 2);
-      expect(coordinator.root.stack.first, isA<HomeRoute>());
-      expect(coordinator.root.stack.last, isA<DeepLinkRoute>());
+      expect(coordinator.root.stack.first, isA<RootHostRoute>());
     });
   });
 
@@ -352,7 +431,7 @@ void main() {
         notified = true;
       });
 
-      coordinator.push(HomeRoute());
+      await coordinator.push(HomeRoute());
       await Future.delayed(Duration.zero);
 
       expect(notified, true);
@@ -361,7 +440,7 @@ void main() {
     test('notifies listeners on pop', () async {
       final coordinator = TestCoordinator();
 
-      coordinator.push(HomeRoute());
+      await coordinator.push(ShellChildOneRoute());
       await Future.delayed(Duration.zero);
 
       var notified = false;

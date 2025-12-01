@@ -272,8 +272,8 @@ class _DebugOverlayState<T extends RouteUnique>
           itemCount: widget.coordinator.paths.length,
           itemBuilder: (context, index) {
             final path = widget.coordinator.paths[index];
-            final isActive = path == widget.coordinator.activePath;
-            final isReadOnly = path is ReadOnlyNavigationPath;
+            final isActive = path == widget.coordinator.pathSegments.last;
+            final isReadOnly = path is FixedNavigationPath;
 
             return Container(
               decoration: const BoxDecoration(
@@ -371,13 +371,11 @@ class _DebugOverlayState<T extends RouteUnique>
                                     await path.pop();
                                     final routeName = () {
                                       try {
-                                        if (route is RouteShellHost) {
-                                          final shellPath = route.getPath(
-                                            widget.coordinator,
-                                          );
+                                        if (route is RouteHost) {
+                                          final shellPath = route.path;
                                           final debugLabel = widget.coordinator
                                               .debugLabel(shellPath);
-                                          shellPath.clear();
+                                          // Don't clear here - onDidPop will handle it
                                           return 'all $debugLabel';
                                         }
                                         return route.toUri() ?? '';
