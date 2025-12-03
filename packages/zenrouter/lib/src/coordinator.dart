@@ -114,19 +114,19 @@ abstract class Coordinator<T extends RouteUnique> with ChangeNotifier {
     required void Function(DynamicNavigationPath<T> path, T host)
     onDynamicPathResolved,
   }) {
-    RouteLayout? host = route.layout;
-    List<RouteLayout> hosts = [];
-    List<NavigationPath> hostPaths = [];
-    while (host != null) {
-      hosts.add(host);
-      hostPaths.add(host.resolvePath(this));
-      host = host.layout;
+    RouteLayout? layout = route.layout;
+    List<RouteLayout> layouts = [];
+    List<NavigationPath> layoutPaths = [];
+    while (layout != null) {
+      layouts.add(layout);
+      layoutPaths.add(layout.resolvePath(this));
+      layout = layout.layout;
     }
-    hostPaths.add(root);
+    layoutPaths.add(root);
 
-    for (var i = hostPaths.length - 1; i >= 1; i--) {
-      final hostOfHostPath = hostPaths[i];
-      final host = hosts[i - 1];
+    for (var i = layoutPaths.length - 1; i >= 1; i--) {
+      final hostOfHostPath = layoutPaths[i];
+      final host = layouts[i - 1];
       switch (hostOfHostPath) {
         case FixedNavigationPath():
           hostOfHostPath.activateRoute(host);
@@ -201,8 +201,19 @@ abstract class Coordinator<T extends RouteUnique> with ChangeNotifier {
 
   /// Pops the last route from the nearest dynamic path.
   void pop() {
-    final path = nearestDynamicPath;
-    if (path.stack.isNotEmpty) path.pop();
+    // Get all dynamic paths from the active host paths
+    final dynamicPaths = activeHostPaths
+        .whereType<DynamicNavigationPath>()
+        .toList();
+
+    // Try to pop from the farthest element if stack length >= 2
+    for (var i = dynamicPaths.length - 1; i >= 0; i--) {
+      final path = dynamicPaths[i];
+      if (path.stack.length >= 2) {
+        path.pop();
+        return;
+      }
+    }
   }
 
   /// Builds the root widget (the primary navigator).
@@ -223,23 +234,24 @@ abstract class Coordinator<T extends RouteUnique> with ChangeNotifier {
   /// - `false` if the route can't pop
   /// - `null` if the [RouteGuard] want manual control
   Future<bool?> tryPop() async {
-    final path = nearestDynamicPath;
+    // Get all dynamic paths from the active host paths
+    final dynamicPaths = activeHostPaths
+        .whereType<DynamicNavigationPath>()
+        .toList();
 
-    // Try to pop active path first
-    if (path.stack.isNotEmpty) {
-      final last = path.stack.last;
-      if (last is RouteGuard) {
-        final didPop = await last.popGuard();
+    // Try to pop from the farthest element if stack length >= 2
+    for (var i = dynamicPaths.length - 1; i >= 0; i--) {
+      final path = dynamicPaths[i];
+      if (path.stack.length >= 2) {
+        final last = path.stack.last;
+        if (last is RouteGuard) {
+          final didPop = await last.popGuard();
+          path.pop();
+          return didPop;
+        }
         path.pop();
-        return didPop;
+        return true;
       }
-      return true;
-    }
-
-    // If child didn't pop, try to pop root
-    if (root.stack.isNotEmpty) {
-      root.pop();
-      return true;
     }
 
     return false;

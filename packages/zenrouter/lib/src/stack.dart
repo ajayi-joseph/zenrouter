@@ -72,8 +72,10 @@ class _NavigationStackState<T extends RouteTarget>
               onPopInvokedWithResult: (didPop, result) async {
                 switch (didPop) {
                   case true when result != null:
+                    route.onDidPop(result, widget.coordinator);
                     route._completeOnResult(result, widget.coordinator);
                   case true:
+                    route.onDidPop(result, widget.coordinator);
                     route._completeOnResult(
                       route._resultValue,
                       widget.coordinator,

@@ -125,14 +125,8 @@ abstract class RouteTarget extends Object {
 
   void _completeOnResult(Object? result, covariant Coordinator? coordinator) {
     _onResult.complete(result);
-    final path = _path;
-    if (path is DynamicNavigationPath) {
-      if (path.stack.contains(this) == true) {
-        path.remove(this);
-        onDidPop(result, coordinator);
-      }
-    }
     _resultValue = result;
+    _path = null;
   }
 }
 

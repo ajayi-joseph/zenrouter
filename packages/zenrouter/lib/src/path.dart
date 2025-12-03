@@ -131,7 +131,6 @@ class DynamicNavigationPath<T extends RouteTarget> extends NavigationPath<T> {
     }
 
     final element = _stack.removeLast();
-    element._path = null;
     element._resultValue = result;
     notifyListeners();
   }
