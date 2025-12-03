@@ -17,10 +17,10 @@ Base class for creating coordinators.
 ```dart
 abstract class Coordinator<T extends RouteUnique> {
   // Main navigation path (always present)
-  final DynamicNavigationPath<T> root;
+  final NavigationPath<T> root;
   
   // Additional paths for nested navigation
-  List<NavigationPath> get paths;
+  List<StackPath> get paths;
   
   // Parse URLs into routes
   T parseRouteFromUri(Uri uri);
@@ -42,7 +42,7 @@ abstract class Coordinator<T extends RouteUnique> {
 ```dart
 class AppCoordinator extends Coordinator<AppRoute> {
   // Define navigation paths
-  final DynamicNavigationPath<AppRoute> homeStack = DynamicNavigationPath('home');
+  final NavigationPath<AppRoute> homeStack = NavigationPath('home');
   final FixedNavigationPath<AppRoute> tabPath = FixedNavigationPath([
     FeedTab(),
     ProfileTab(),
@@ -50,7 +50,7 @@ class AppCoordinator extends Coordinator<AppRoute> {
   ]);
   
   @override
-  List<NavigationPath> get paths => [root, homeStack, tabPath];
+  List<StackPath> get paths => [root, homeStack, tabPath];
   
   @override
   AppRoute parseRouteFromUri(Uri uri) {
@@ -76,7 +76,7 @@ MaterialApp.router(
 
 ## Properties
 
-### `root` → `DynamicNavigationPath<T>`
+### `root` → `NavigationPath<T>`
 
 The main navigation path. Always present and managed by the coordinator.
 
@@ -95,7 +95,7 @@ if (coordinator.root.stack.length > 1) {
 
 **Note:** You typically don't manipulate `root` directly - use coordinator methods like `push()`, `pop()`, etc.
 
-### `paths` → `List<NavigationPath>`
+### `paths` → `List<StackPath>`
 
 All navigation paths managed by this coordinator.
 
@@ -103,7 +103,7 @@ All navigation paths managed by this coordinator.
 
 ```dart
 @override
-List<NavigationPath> get paths => [
+List<StackPath> get paths => [
   root,              // Main path (required!)
   homeStack,         // Home navigation
   settingsStack,     // Settings navigation
@@ -537,11 +537,11 @@ MaterialApp.router(
 
 ### CoordinatorUtils<T>
 
-Utility methods for `DynamicNavigationPath`.
+Utility methods for `NavigationPath`.
 
 ```dart
 extension type CoordinatorUtils<T extends RouteTarget>(
-  DynamicNavigationPath<T> path
+  NavigationPath<T> path
 ) {
   // Clears the path and sets a single route
   void setRoute(T route);
@@ -634,5 +634,5 @@ class MyApp extends StatelessWidget {
 
 - [Coordinator Pattern Guide](../paradigms/coordinator.md) - Complete usage guide
 - [Route Mixins](mixins.md) - RouteUnique, RouteLayout, RouteDeepLink
-- [Navigation Paths](navigation-paths.md) - DynamicNavigationPath, FixedNavigationPath
+- [Navigation Paths](navigation-paths.md) - NavigationPath, FixedNavigationPath
 - [Deep Linking Guide](../guides/deep-linking.md) - Deep linking setup (if exists)

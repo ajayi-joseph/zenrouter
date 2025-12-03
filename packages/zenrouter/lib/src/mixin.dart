@@ -30,6 +30,10 @@ typedef RouteLayoutConstructor<T extends RouteUnique> =
 mixin RouteLayout<T extends RouteUnique> on RouteUnique {
   static const navigationPath = 'NavigationPath';
   static const indexedStackPath = 'IndexedStackPath';
+  static void defineLayout<T extends RouteLayout>(
+    Type homeHost,
+    T Function() constructor,
+  ) => RouteLayout.layoutConstructorTable[homeHost] = constructor;
   static Map<Type, RouteLayoutConstructor> layoutConstructorTable = {};
   static Map<String, RouteLayoutBuilder> layoutBuilderTable = {
     navigationPath: (coordinator, path, layout) => NavigationStack(
@@ -61,6 +65,10 @@ mixin RouteLayout<T extends RouteUnique> on RouteUnique {
 
   StackPath<RouteUnique> resolvePath(covariant Coordinator coordinator);
 
+  /// URI not use in RouteLayout
+  @override
+  Uri toUri() => Uri.parse('/');
+
   @override
   Widget build(covariant Coordinator coordinator, BuildContext context) {
     final path = resolvePath(coordinator);
@@ -81,10 +89,8 @@ mixin RouteLayout<T extends RouteUnique> on RouteUnique {
     resolvePath(coordinator).reset();
   }
 
-  static void defineLayout<T extends RouteLayout>(
-    Type homeHost,
-    T Function() constructor,
-  ) => RouteLayout.layoutConstructorTable[homeHost] = constructor;
+  @override
+  operator ==(Object other) => other.runtimeType == runtimeType;
 }
 
 mixin RouteRedirect<T extends RouteTarget> on RouteTarget {
