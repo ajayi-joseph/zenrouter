@@ -23,19 +23,90 @@ ZenRouter is the only router you'll ever need - supporting three distinct paradi
 
 ## Three Paradigms, Infinite Flexibility
 
+
+### Choose Your Path
+
+```
+Need web support, deep linking, and router devtools to handle complex scalable navigation?
+│
+├─ YES → Use Coordinator
+│        ✓ Deep linking & URL sync
+│        ✓ Devtools ready!
+│        ✓ Back button gesture (Web back, predictive back, etc)
+│        ✓ Perfect for web, complex mobile apps
+│
+└─ NO → Is navigation driven by state?
+       │
+       ├─ YES → Use Declarative
+       │        ✓ Efficient Myers diff
+       │        ✓ React-like patterns
+       │        ✓ Perfect for tab bars
+       │
+       └─ NO → Use Imperative
+                ✓ Simple & direct
+                ✓ Full control
+                ✓ Perfect for mobile
+```
+
 ### 🎮 **Imperative** - Direct Control
+
 *Perfect for mobile apps and event-driven navigation*
 
-```dart
-final path = NavigationPath<AppRoute>();
+#### Quick Start
 
-// Push routes
-path.push(ProfileRoute());
+First, define a navigation path and all possible routes. For example, let's say you have `Home` and `Profile` routes:
+
+```dart
+class Home extends RouteTarget {}
+
+class Profile extends RouteTarget {
+  Profile(this.id);
+  final String id;
+
+  /// Override == operator to prevent unwanted behavior when pushing the same route
+  @override
+  operator ==(Object other) {
+    if (!compareWith(other)) return false;
+    return other is Profile && other.id == id;
+  }
+
+  @override
+  int get hashCode => Object.hash(super.hashCode, id);
+}
+
+final appPath = NavigationPath();
+```
+
+Now that the setup is complete, let's wire up the navigation. The `NavigationStack` widget expects two main parameters:
+- `path`: The route stack to display
+- `resolver`: A function for resolving which transition type each route will use
+
+```dart
+class AppRouter extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return NavigationStack(
+      path: appPath,
+      resolver: (route) => switch (route) {
+        Home() => StackTransition.material(HomePage()),
+        Profile() => StackTransition.material(ProfilePage()),
+      },
+    );
+  }
+}
+```
+
+That's it! You've successfully set up imperative routing for your app. To navigate, simply call `push()` to open a new route (you can `await` the result when it's popped), and `pop()` to go back. The `NavigationPath` class offers many handy operations—see more in the [NavigationPath API documentation](docs/api/navigation-paths.md#navigationpath).
+
+```dart
+// Open Profile route
+ElevatedButton(
+  onPressed: () => appPath.push(Profile('Joe')),
+  child: Text('Open "Joe" profile'),
+),
 
 // Pop back
-path.pop();
-
-// That's it!
+appPath.pop();
 ```
 
 **When to use:**
@@ -51,21 +122,54 @@ path.pop();
 ### 📊 **Declarative** - State-Driven
 *Perfect for tab bars, filtered lists, and React-like UIs*
 
+#### Quick Start
+
+In declarative navigation, your UI is a function of your state. When your state changes, the navigation stack automatically updates to reflect it. ZenRouter uses the **Myers diff algorithm** to efficiently compute the minimal changes needed, ensuring optimal performance even with complex navigation stacks.
+
+Let's build a simple tab navigation example. First, define your routes and state:
+
 ```dart
-// Your state
-List<int> pages = [1, 2, 3];
+class HomeTab extends RouteTarget {}
+class SearchTab extends RouteTarget {}
+class ProfileTab extends RouteTarget {}
 
-// Navigation automatically updates when state changes
-NavigationStack.declarative(
-  routes: [
-    for (final page in pages) PageRoute(page),
-  ],
-  resolver: (route) => StackTransition.material(...),
-)
+class TabNavigator extends StatefulWidget {
+  @override
+  State<TabNavigator> createState() => _TabNavigatorState();
+}
 
-// Add a page? Navigation updates automatically!
-setState(() => pages.add(4));
+class _TabNavigatorState extends State<TabNavigator> {
+  int currentTab = 0;
+  
+  @override
+  Widget build(BuildContext context) {
+    return NavigationStack.declarative(
+      routes: [
+        HomeTab(),
+        switch (currentTab) {
+          0 => SearchTab(),
+          1 => ProfileTab(),
+          _ => SearchTab(),
+        },
+      ],
+      resolver: (route) => switch (route) {
+        HomeTab() => StackTransition.material(HomePage()),
+        SearchTab() => StackTransition.material(SearchPage()),
+        ProfileTab() => StackTransition.material(ProfilePage()),
+      },
+    );
+  }
+}
 ```
+
+When you update the state, the navigation stack automatically reflects the changes. ZenRouter intelligently diffs the old and new route lists to determine the minimal set of push/pop operations needed:
+
+```dart
+// Switch tabs
+setState(() => currentTab = 1); // Automatically pushes ProfileTab
+```
+
+That's it! The navigation stack stays perfectly in sync with your state—no manual `push()` or `pop()` calls needed. This pattern is ideal for tab bars, filtered lists, or any UI where navigation is derived from application state.
 
 **When to use:**
 - Tab navigation
@@ -80,30 +184,101 @@ setState(() => pages.add(4));
 ### 🗺️ **Coordinator** - Deep Linking & Web
 *Perfect for web apps and complex navigation hierarchies*
 
+#### Quick Start
+
+Ready to level up? When your app needs to support deep linking, web URLs, or browser navigation, it's time to graduate to the **Coordinator** pattern. This is the final and most powerful routing paradigm in ZenRouter—built for production apps that need to handle complex navigation scenarios across multiple platforms.
+
+The Coordinator pattern gives you:
+- 🔗 **Deep linking** - Open specific screens from external sources (`myapp://profile/123`)
+- 🌐 **URL synchronization** - Keep browser URLs in sync with navigation state
+- ⬅️ **Browser back button** - Native web navigation that just works
+- 🛠️ **Dev tools** - Built-in debugging and route inspection
+
+Let's build a Coordinator-powered app. First, define your routes with URI support:
+
+First, create a base route class for your app. The `RouteUnique` mixin is **required** for Coordinator—it enforces that every route must define a unique URI, which is essential for deep linking and URL synchronization:
+
 ```dart
-// Define routes with URIs
-class ProfileRoute extends RouteTarget with RouteUnique {
+abstract class AppRoute extends RouteTarget with RouteUnique {}
+```
+
+Now define your concrete routes by extending `AppRoute`:
+
+```dart
+class HomeRoute extends AppRoute {
   @override
-  Uri toUri() => Uri.parse('/profile');
+  Uri toUri() => Uri.parse('/');
+  
+  @override
+  Widget build(AppCoordinator coordinator, BuildContext context) {
+    return HomePage(coordinator: coordinator);
+  }
 }
 
-// Create coordinator
-class AppCoordinator extends Coordinator<AppRoute> {
+class ProfileRoute extends AppRoute {
+  ProfileRoute(this.userId);
+  final String userId;
+  
   @override
-  AppRoute parseRouteFromUri(Uri uri) {
+  Uri toUri() => Uri.parse('/profile/$userId');
+  
+  @override
+  Widget build(AppCoordinator coordinator, BuildContext context) {
+    return ProfilePage(userId: userId, coordinator: coordinator);
+  }
+  
+  @override
+  operator ==(Object other) {
+    if (!compareWith(other)) return false;
+    return other is ProfileRoute && other.userId == userId;
+  }
+  
+  @override
+  int get hashCode => Object.hash(super.hashCode, userId);
+}
+```
+
+> [!IMPORTANT]
+> Notice that the `build()` method uses `AppCoordinator` (not `Coordinator`) as the parameter type. This is because `Coordinator` is **covariant**—when you create your `AppCoordinator extends Coordinator<AppRoute>`, all your routes will receive that specific coordinator type, giving you type-safe access to any custom methods or properties you add to `AppCoordinator`.
+
+Next, create your Coordinator by extending the `Coordinator` class and implementing URI parsing:
+
+```dart
+class AppCoordinator extends Coordinator<RouteTarget> {
+  @override
+  RouteTarget parseRouteFromUri(Uri uri) {
     return switch (uri.pathSegments) {
       [] => HomeRoute(),
-      ['profile'] => ProfileRoute(),
+      ['profile', String userId] => ProfileRoute(userId),
       _ => NotFoundRoute(),
     };
   }
 }
-
-// Now you have:
-// ✅ myapp://profile opens ProfileRoute
-// ✅ Website URLs work seamlessly
-// ✅ Browser back button supported
 ```
+
+Finally, wire it up with `MaterialApp.router` to enable full platform navigation:
+
+```dart
+class MyApp extends StatelessWidget {
+  final coordinator = AppCoordinator();
+  
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp.router(
+      routerDelegate: coordinator.routerDelegate,
+      routeInformationParser: coordinator.routeInformationParser,
+    );
+  }
+}
+```
+
+That's it! Your app now supports:
+- ✅ Deep links: `myapp://profile/joe` automatically navigates to Joe's profile
+- ✅ Web URLs: Users can bookmark and share `https://myapp.com/profile/joe`
+- ✅ Browser navigation: Back/forward buttons work seamlessly
+- ✅ Dev tools: Debug routes and navigation flows in real-time
+
+The Coordinator handles all the complexity of URI parsing, route restoration, and platform integration—you just focus on building your app.
 
 **When to use:**
 - Web applications
@@ -124,187 +299,10 @@ class AppCoordinator extends Coordinator<AppRoute> {
 | **Deep Linking** | ❌ | ❌ | ✅ |
 | **State-Driven** | Compatible | ✅ Native | Compatible |
 | **Best For** | Mobile apps | Tab bars, lists | Web, large apps |
+| **Route Ability** | `Guard`, `Redirect`, `Transition` | `Guard`, `Redirect`, `Transition` | `Guard`, `Redirect`, `Transition`, **`DeepLink`** |
 
 ---
 
-## Getting Started
-
-### Installation
-
-```yaml dependencies:
-  zenrouter: ^0.1.0
-```
-
-```bash
-flutter pub get
-```
-
-### Quick Start - Pick Your Paradigm
-
-#### Simple Mobile App? → Imperative
-
-```dart
-// 1. Create a path
-final path = NavigationPath<RouteTarget>();
-
-// 2. Render it
-NavigationStack(
-  path: path,
-  defaultRoute: HomeRoute(),
-  resolver: (route) => StackTransition.material(
-    route.build(context),
-  ),
-)
-
-// 3. Navigate!
-path.push(ProfileRoute());
-```
-
-#### Tab Bar or List? → Declarative
-
-```dart
-class MyApp extends StatefulWidget {
-  @override
-  State<MyApp> createState() => _MyAppState();
-}
-
-class _MyAppState extends State<MyApp> {
-  int selectedTab = 0;
-  
-  @override
-  Widget build(BuildContext context) {
-    return NavigationStack.declarative(
-      routes: [
-        HomeRoute(),
-        switch (selectedTab) {
-          0 => FeedRoute(),
-          1 => ProfileRoute(),
-          2 => SettingsRoute(),
-          _ => FeedRoute(),
-        },
-      ],
-      resolver: (route) => StackTransition.material(...),
-    );
-  }
-}
-```
-
-#### Web App? → Coordinator
-
-```dart
-// 1. Define routes with URIs
-class HomeRoute extends RouteTarget with RouteUnique {
-  @override
-  Uri toUri() => Uri.parse('/');
-  
-  @override
-  Widget build(Coordinator coordinator, BuildContext context) {
-    return HomeScreen();
-  }
-}
-
-// 2. Create coordinator
-class AppCoordinator extends Coordinator<AppRoute> {
-  @override
-  AppRoute parseRouteFromUri(Uri uri) {
-    return switch (uri.pathSegments) {
-      [] => HomeRoute(),
-      ['profile'] => ProfileRoute(),
-      _ => NotFoundRoute(),
-    };
-  }
-}
-
-// 3. Use MaterialApp.router
-MaterialApp.router(
-  routerDelegate: coordinator.routerDelegate,
-  routeInformationParser: coordinator.routeInformationParser,
-)
-```
-
-[→ Full Getting Started Guide](docs/guides/getting-started.md)
-
----
-
-## Powerful Features
-
-### 🛡️ Route Guards - Prevent Unwanted Navigation
-
-```dart
-class FormRoute extends RouteTarget with RouteGuard {
-  bool hasUnsavedChanges = false;
-  
-  @override
-  Future<bool> popGuard() async {
-    if (!hasUnsavedChanges) return true;
-    return await showConfirmDialog() ?? false;
-  }
-}
-```
-
-### 🔄 Route Redirects - Authentication & Authorization
-
-```dart
-class DashboardRoute extends RouteTarget with RouteRedirect<AppRoute> {
-  @override
-  Future<AppRoute> redirect() async {
-    final isLoggedIn = await auth.check();
-    return isLoggedIn ? this : LoginRoute();
-  }
-}
-```
-
-### 🎨 Custom Transitions
-
-```dart
-resolver: (route) => switch (route) {
-  HomeRoute() => StackTransition.material(HomeScreen()),
-  ProfileRoute() => StackTransition.cupertino(ProfileScreen()),
-  ModalRoute() => StackTransition.sheet(ModalContent()),
-  DialogRoute() => StackTransition.dialog(DialogContent()),
-  _ => StackTransition.material(NotFoundScreen()),
-}
-```
-
-### 🏗️ Nested Navigation
-
-```dart
-class AppCoordinator extends Coordinator<AppRoute> {
-  final mainNav = NavigationPath('main');
-  final settingsNav = NavigationPath('settings');
-  final tabNav = IndexedStackPath([Tab1(), Tab2(), Tab3()], 'tabs');
-  
-  @override
-  List<StackPath> get paths => [root, mainNav, settingsNav, tabNav];
-}
-```
-
----
-
-## Choose Your Path
-
-```
-Need web support or deep linking?
-│
-├─ YES → Use Coordinator
-│        ✓ Deep linking & URL sync
-│        ✓ Browser back button
-│        ✓ Perfect for web apps
-│
-└─ NO → Is navigation driven by state?
-       │
-       ├─ YES → Use Declarative
-       │        ✓ Efficient Myers diff
-       │        ✓ React-like patterns
-       │        ✓ Perfect for tab bars
-       │
-       └─ NO → Use Imperative
-                ✓ Simple & direct
-                ✓ Full control
-                ✓ Perfect for mobile
-```
-
----
 
 ## Documentation
 
@@ -324,45 +322,6 @@ Need web support or deep linking?
 - [Imperative Example](example/lib/main_imperative.dart) - Multi-step form
 - [Declarative Example](example/lib/main_declrative.dart) - State-driven navigation
 - [Coordinator Example](example/lib/main_coordinator.dart) - Deep linking & nested navigation
-
----
-
-## Migration Made Easy
-
-### From Navigator 1.0
-
-```dart
-// Before (Navigator 1.0)
-Navigator.push(context, MaterialPageRoute(builder: (_) => ProfileScreen()));
-Navigator.pop(context);
-
-// After (ZenRouter Imperative)
-path.push(ProfileRoute());
-path.pop();
-```
-
-### From GoRouter / Navigator 2.0
-
-```dart
-// Before (GoRouter)
-context.go('/profile');
-context.push('/settings');
-
-// After (ZenRouter Coordinator)
-coordinator.replace(ProfileRoute());
-coordinator.push(SettingsRoute());
-```
-
----
-
-## Platform Support
-
-✅ **iOS** - Native page transitions  
-✅ **Android** - Material design support  
-✅ **Web** - Full URL and deep linking  
-✅ **macOS** - Desktop navigation  
-✅ **Windows** - Desktop navigation  
-✅ **Linux** - Desktop navigation  
 
 ---
 

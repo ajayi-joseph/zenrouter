@@ -28,7 +28,7 @@ Each mixin adds specific capabilities:
 
 ### RouteUnique
 
-Makes a route identifiable by `Coordinator` and provides URI mapping.
+Makes a route identifiable by `Coordinator` and provides URI mapping. This mixin is **required** when using the Coordinator pattern for deep linking and URL synchronization.
 
 **Required when:**
 - Using the Coordinator pattern
@@ -38,6 +38,23 @@ Makes a route identifiable by `Coordinator` and provides URI mapping.
 **Not needed when:**
 - Using pure imperative navigation
 - Using pure declarative navigation without Coordinator
+
+#### Recommended Pattern
+
+When using `RouteUnique`, **create a base abstract class first** that extends `RouteTarget` with the `RouteUnique` mixin. Then have all your app routes extend this base class:
+
+```dart
+abstract class AppRoute extends RouteTarget with RouteUnique {}
+```
+
+**Why this pattern?**
+1. **Narrows Coordinator scope** - Your `Coordinator<AppRoute>` only works with `AppRoute` types, providing strong type safety
+2. **Better library context** - The internal library can accurately infer types and handle routing logic more efficiently
+3. **Cleaner architecture** - Single source of truth for your app's route contract
+4. **Covariant coordinator** - Routes receive your specific `AppCoordinator` type in `build()` methods, giving access to custom methods
+
+> [!IMPORTANT]
+> The `Coordinator` class is **covariant**. When you create `AppCoordinator extends Coordinator<AppRoute>`, the `build()` method in your routes will receive `AppCoordinator` (not generic `Coordinator`), providing type-safe access to any custom methods or properties you add.
 
 #### API
 
@@ -60,15 +77,19 @@ mixin RouteUnique on RouteTarget {
 }
 ```
 
-#### Example
+#### Example: Basic Setup
 
 ```dart
-class HomeRoute extends RouteTarget with RouteUnique {
+// 1. Create base route class
+abstract class AppRoute extends RouteTarget with RouteUnique {}
+
+// 2. Define concrete routes
+class HomeRoute extends AppRoute {
   @override
   Uri toUri() => Uri.parse('/');
   
   @override
-  Widget build(Coordinator coordinator, BuildContext context) {
+  Widget build(AppCoordinator coordinator, BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Home')),
       body: Center(
@@ -81,24 +102,36 @@ class HomeRoute extends RouteTarget with RouteUnique {
   }
 }
 
-class ProfileRoute extends RouteTarget with RouteUnique {
+class ProfileRoute extends AppRoute {
   @override
   Uri toUri() => Uri.parse('/profile');
   
   @override
-  Widget build(Coordinator coordinator, BuildContext context) {
+  Widget build(AppCoordinator coordinator, BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Profile')),
       body: const Center(child: Text('Profile Page')),
     );
   }
 }
+
+// 3. Create coordinator
+class AppCoordinator extends Coordinator<AppRoute> {
+  @override
+  AppRoute parseRouteFromUri(Uri uri) {
+    return switch (uri.pathSegments) {
+      [] => HomeRoute(),
+      ['profile'] => ProfileRoute(),
+      _ => NotFoundRoute(),
+    };
+  }
+}
 ```
 
-#### With Parameters
+#### Example: With Parameters
 
 ```dart
-class UserRoute extends RouteTarget with RouteUnique {
+class UserRoute extends AppRoute {
   final String userId;
   
   UserRoute(this.userId);
@@ -107,7 +140,7 @@ class UserRoute extends RouteTarget with RouteUnique {
   Uri toUri() => Uri.parse('/user/$userId');
   
   @override
-  Widget build(Coordinator coordinator, BuildContext context) {
+  Widget build(AppCoordinator coordinator, BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: Text('User: $userId')),
       body: UserProfile(userId: userId),
@@ -129,17 +162,11 @@ class UserRoute extends RouteTarget with RouteUnique {
 
 ### RouteLayout<T>
 
-Creates a navigation host that contains and manages other routes. Essential for nested navigation.
+Creates a navigation layout that contains and manages other routes, essential for building nested navigation hierarchies like tab bars, drawers, and shell routes.
 
-**Use when:**
-- Creating tab bar containers
-- Building drawer navigation
-- Managing nested navigation stacks
-- Creating shell routes
+`RouteLayout` acts as a host for `StackPath` instances. Each type of stack path requires its own corresponding layout widget. ZenRouter provides two built-in path types: `NavigationPath` (for stack-based push/pop navigation) uses `NavigationStack` as its layout, while `IndexedStackPath` (for tab bars and indexed navigation) uses `IndexedStack` as its layout.
 
-**Types of hosts:**
-- **DynamicNavigationPath host** - Stack-based navigation (push/pop)
-- **FixedNavigationPath host** - Indexed navigation (tabs, drawers)
+**Custom Layouts**: You can create your own layout types by implementing the `RouteLayout` mixin, registering the constructor in `layoutConstructorTable`, and providing the default widget builder in `layoutBuilderTable`. For more details, check out the advanced tutorial.
 
 #### API
 
@@ -380,12 +407,9 @@ class AppCoordinator extends Coordinator<AppRoute> {
 
 ### RouteGuard
 
-Prevents navigation away from a route unless certain conditions are met. Perfect for unsaved changes warnings.
+Prevents navigation away from a route unless specific conditions are met, ideal for protecting unsaved work or confirmation prompts. When a user attempts to navigate away (via back button, swipe gesture, or programmatic `pop()`), the `popGuard()` method is automatically called to determine whether navigation should proceed.
 
-**Use when:**
-- Forms have unsaved changes
-- Processes shouldn't be interrupted
-- You need confirmation before leaving
+Use this mixin when you need to protect forms with unsaved changes, prevent interruption of ongoing processes, or require user confirmation before leaving a screen.
 
 #### API
 
@@ -404,9 +428,9 @@ class EditFormRoute extends RouteTarget with RouteUnique, RouteGuard {
   
   @override
   Future<bool> popGuard() async {
-    if (!hasUnsavedChanges) return true; // No changes, allow pop
+    if (!hasUnsavedChanges) return true; // No unsaved changes, allow navigation
     
-    // Show confirmation dialog
+    // Ask user to confirm discarding changes
     final shouldPop = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -442,7 +466,7 @@ class EditFormRoute extends RouteTarget with RouteUnique, RouteGuard {
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () async {
-            // Guard is automatically checked
+            // popGuard() is automatically checked before navigation
             coordinator.pop();
           },
         ),
@@ -500,21 +524,17 @@ class UploadRoute extends RouteTarget with RouteGuard {
 
 ### RouteRedirect<T>
 
-Redirects navigation to a different route based on conditions. Perfect for authentication flows and conditional routing.
+Redirects navigation to a different route based on runtime conditions, essential for authentication flows, permission checks, and conditional routing. The `redirect()` method is called automatically when navigating to a route, allowing you to intercept and redirect to a different destination.
 
-**Use when:**
-- Checking authentication state
-- Enforcing permissions
-- Conditional routing based on data
-- A/B testing different flows
+Use this mixin for authentication state checks, permission enforcement, data-driven conditional routing, or A/B testing different navigation flows.
 
 #### API
 
 ```dart
 mixin RouteRedirect<T extends RouteTarget> on RouteTarget {
-  // Return the route to navigate to (can be async)
-  // Return this to stay on current route
-  // Return null to prevent navigation
+  // Return the target route (can be async)
+  // Return `this` to proceed to the current route
+  // Return null to cancel navigation
   FutureOr<T?> redirect();
 }
 ```
@@ -529,11 +549,11 @@ class DashboardRoute extends RouteTarget
     final isLoggedIn = await authService.checkAuth();
     
     if (!isLoggedIn) {
-      // Redirect to login
+      // User not authenticated, redirect to login with return URL
       return LoginRoute(redirectTo: '/dashboard');
     }
     
-    // Stay on dashboard
+    // User is authenticated, proceed to dashboard
     return this;
   }
   
@@ -594,7 +614,7 @@ class AdminRoute extends RouteTarget with RouteRedirect<AppRoute> {
       return UnauthorizedRoute();
     }
     
-    return this; // User is admin, allow access
+    return this; // User has admin privileges, allow access
   }
 }
 ```
@@ -630,7 +650,7 @@ class PostRoute extends RouteTarget with RouteRedirect<AppRoute> {
 
 #### Redirect Chains
 
-Redirects can chain together - each redirect is followed until a non-redirecting route is reached:
+Redirects can chain together automatically. ZenRouter follows each redirect until reaching a route that doesn't redirect:
 
 ```dart
 // RouteA redirects to RouteB
@@ -645,7 +665,7 @@ class RouteB extends RouteTarget with RouteRedirect<AppRoute> {
   Future<AppRoute> redirect() async => RouteC();
 }
 
-// RouteC doesn't redirect
+// RouteC has no redirect, this is the final destination
 class RouteC extends RouteTarget {}
 
 // Pushing RouteA ends up at RouteC!
@@ -657,13 +677,9 @@ coordinator.push(RouteA());
 
 ### RouteDeepLink
 
-Provides custom handling for deep links beyond the default strategies.
+Provides custom handling for deep links with advanced control over navigation behavior. While ZenRouter handles basic deep linking automatically through `RouteUnique`, this mixin allows you to customize how your app responds to deep links—whether by replacing the entire stack, pushing onto the current stack, or executing completely custom logic.
 
-**Use when:**
-- Deep link requires multi-step navigation setup
-- You need to track analytics for deep links
-- Deep link needs to load data first
-- Custom navigation flow for deep links
+Use this mixin when deep links require multi-step navigation setup, analytics tracking, data preloading, or custom navigation flows that go beyond simple route replacement.
 
 #### API
 
@@ -680,8 +696,8 @@ mixin RouteDeepLink on RouteUnique {
 }
 
 enum DeeplinkStrategy {
-  replace,  // Replace entire stack with this route (default)
-  push,     // Push onto current stack
+  replace,  // Replace entire navigation stack with this route (default)
+  push,     // Push this route onto the existing stack
   custom,   // Use deeplinkHandler()
 }
 ```
@@ -706,21 +722,21 @@ class ProductDetailRoute extends RouteTarget
     AppCoordinator coordinator,
     Uri uri,
   ) async {
-    // 1. Ensure correct tab is active
+    // Step 1: Navigate to the correct tab
     coordinator.replace(ShopTab());
     
-    // 2. Load product data
+    // Step 2: Load product data asynchronously
     final product = await productService.loadProduct(productId);
     
-    // 3. Set up category first
+    // Step 3: Navigate to category if available
     if (product.category != null) {
       coordinator.push(CategoryRoute(product.category!));
     }
     
-    // 4. Navigate to product
+    // Step 4: Finally navigate to the product detail
     coordinator.push(this);
     
-    // 5. Track analytics
+    // Step 5: Track deep link analytics
     analytics.logDeepLink(uri, {
       'product_id': productId,
       'source': uri.queryParameters['source'],
@@ -758,8 +774,8 @@ class ModalRoute extends RouteTarget with RouteUnique, RouteDeepLink {
   }
 }
 
-// Deep link: myapp://modal
-// Result: Pushed on top of existing stack
+// Example: myapp://modal opens as a modal on top of current navigation
+// The existing stack is preserved
 ```
 
 #### Example: Analytics Tracking
@@ -883,92 +899,8 @@ class AdaptiveRoute extends RouteTarget with RouteTransition {
 
 ---
 
-## Mixin Combinations
 
-### Common Patterns
-
-#### Simple Page
-```dart
-class SimplePage extends AppRoute with RouteUnique {
-  @override
-  Uri toUri() => Uri.parse('/simple');
-  
-  @override
-  Widget build(Coordinator coordinator, BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Simple Page')),
-      body: const Center(child: Text('Hello!')),
-    );
-  }
-}
-```
-
-#### Guarded Form
-```dart
-class FormPage extends AppRoute with RouteUnique, RouteGuard {
-  bool hasUnsavedChanges = false;
-  
-  @override
-  Future<bool> popGuard() async {
-    if (!hasUnsavedChanges) return true;
-    return await confirmDiscard(context);
-  }
-  
-  @override
-  Uri toUri() => Uri.parse('/form');
-  
-  @override
-  Widget build(Coordinator coordinator, BuildContext context) {
-    return FormScreen(
-      onChanged: () => hasUnsavedChanges = true,
-    );
-  }
-}
-```
-
-#### Protected Route with Redirect
-```dart
-class ProtectedRoute extends AppRoute 
-    with RouteUnique, RouteRedirect<AppRoute> {
-  @override
-  Future<AppRoute> redirect() async {
-    final isAuthed = await auth.check();
-    return isAuthed ? this : LoginRoute();
-  }
-  
-  @override
-  Uri toUri() => Uri.parse('/protected');
-  
-  @override
-  Widget build(Coordinator coordinator, BuildContext context) {
-    return const ProtectedContent();
-  }
-}
-```
-
-#### Deep Link with Analytics
-```dart
-class TrackedRoute extends AppRoute with RouteUnique, RouteDeepLink {
-  @override
-  DeeplinkStrategy get deeplinkStrategy => DeeplinkStrategy.custom;
-  
-  @override
-  Future<void> deeplinkHandler(Coordinator coordinator, Uri uri) async {
-    analytics.logDeepLink(uri);
-    coordinator.replace(this);
-  }
-  
-  @override
-  Uri toUri() => Uri.parse('/tracked');
-  
-  @override
-  Widget build(Coordinator coordinator, BuildContext context) {
-    return const TrackedScreen();
-  }
-}
-```
-
-#### Everything Together
+### Full Example
 ```dart
 class ComplexRoute extends AppRoute
     with RouteUnique, RouteGuard, RouteRedirect, RouteDeepLink {
@@ -989,7 +921,6 @@ class ComplexRoute extends AppRoute
   @override
   Future<void> deeplinkHandler(Coordinator coordinator, Uri uri) async {
     analytics.log(uri);
-    await setupNavigationStack(coordinator);
     coordinator.push(this);
   }
   
@@ -1012,7 +943,7 @@ Which mixins do I need?
 │  ├─ Yes → Add RouteUnique ✓
 │  └─ No → Just extend RouteTarget
 │
-├─ Creating a navigation host (tabs, shells)?
+├─ Creating a navigation host (tabs, navigation-stack)?
 │  ├─ Yes → Add RouteLayout ✓
 │  └─ No → Continue
 │

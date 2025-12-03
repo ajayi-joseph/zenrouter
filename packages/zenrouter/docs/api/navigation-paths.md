@@ -192,29 +192,6 @@ print(result['content']); // 'Hello'
 await path.pop(); // Guard is consulted, pop only happens if guard returns true
 ```
 
-#### `replace(List<T> stack)` → `void`
-
-Replaces the entire navigation stack with a new set of routes.
-
-Pops all existing routes (respecting guards), then pushes all new routes.
-
-**Use for:** Resetting navigation state, logging out, completing flows.
-
-**Example:**
-```dart
-// Reset to home
-path.replace([HomeRoute()]);
-
-// Set up a new stack
-path.replace([HomeRoute(), ProfileRoute(), SettingsRoute()]);
-
-// After login, reset to authenticated flow
-path.replace([DashboardRoute()]);
-
-// After logout, reset to auth flow
-path.replace([WelcomeRoute()]);
-```
-
 #### `pushOrMoveToTop(T element)` → `Future<void>`
 
 Pushes a route to the top of the stack, or moves it if already present.
