@@ -32,11 +32,11 @@ A `Coordinator` manages multiple `NavigationPath`s and provides:
 ```dart
 class AppCoordinator extends Coordinator<AppRoute> {
   // Define multiple paths for nested navigation
-  final DynamicNavigationPath<AppRoute> homeStack = DynamicNavigationPath();
-  final FixedNavigationPath<AppRoute> tabStack = FixedNavigationPath([...]);
+  final NavigationPath<AppRoute> homeStack = NavigationPath();
+  final IndexedStackPath<AppRoute> tabStack = IndexedStackPath([...]);
   
   @override
-  List<NavigationPath> get paths => [root, homeStack, tabStack];
+  List<StackPath> get paths => [root, homeStack, tabStack];
   
   @override
   AppRoute parseRouteFromUri(Uri uri) {
@@ -871,12 +871,12 @@ Define all paths in one place:
 ```dart
 class AppCoordinator extends Coordinator<AppRoute> {
   // All paths defined here
-  final homeStack = DynamicNavigationPath<AppRoute>('home');
-  final settingsStack = DynamicNavigationPath<AppRoute>('settings');
-  final tabIndexed = FixedNavigationPath<AppRoute>([...], 'tabs');
+  final homeStack = NavigationPath<AppRoute>('home');
+  final settingsStack = NavigationPath<AppRoute>('settings');
+  final tabIndexed = IndexedStackPath<AppRoute>([...], 'tabs');
   
   @override
-  List<NavigationPath> get paths => [root, homeStack, settingsStack, tabIndexed];
+  List<StackPath> get paths => [root, homeStack, settingsStack, tabIndexed];
 }
 ```
 
@@ -944,7 +944,7 @@ Add `RouteUnique` mixin and create a coordinator:
 
 ```dart
 // Before (imperative)
-final path = DynamicNavigationPath<RouteTarget>();
+final path = NavigationPath<RouteTarget>();
 path.push(ProfileRoute());
 
 // After (coordinator)
