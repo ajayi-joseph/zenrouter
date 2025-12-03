@@ -481,7 +481,7 @@ class _WizardNavigationState extends State<WizardNavigation> {
 
 ### ✅ DO: Implement Equality Correctly
 
-Routes **must** implement `==` and `hashCode` for Myers diff to work:
+Routes **must** implement `==` and `hashCode` for Myers diff to work, make sure you call `compareWith` to align with underline `RouteTarget` comparing logic.
 
 ```dart
 class ItemRoute extends RouteTarget {
@@ -490,9 +490,10 @@ class ItemRoute extends RouteTarget {
   ItemRoute(this.itemId);
   
   @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      (other is ItemRoute && other.itemId == itemId);
+  bool operator ==(Object other) {
+    if (!compareWith(other)) return false;
+    return other is ItemRoute && other.itemId == itemId;
+  }
   
   @override
   int get hashCode => Object.hash(runtimeType, itemId);
@@ -500,21 +501,6 @@ class ItemRoute extends RouteTarget {
 ```
 
 Without proper equality, Myers diff can't identify unchanged routes and will recreate them unnecessarily!
-
-### ✅ DO: Use Keys for Stateful Widgets
-
-Add keys to preserve widget state across rebuilds:
-
-```dart
-class MyPage extends StatefulWidget {
-  final int id;
-  
-  const MyPage({required this.id, super.key});
-  
-  // Use const constructor to enable Flutter's optimization
-  static Widget create(int id) => MyPage(key: ValueKey(id), id: id);
-}
-```
 
 ### ✅ DO: Derive Routes from Single Source of Truth
 
@@ -631,8 +617,10 @@ onTap: () => path.push(DetailRoute())
 If you need deep linking or web support:
 
 ```dart
-// Add RouteUnique mixin to your routes
-class MyRoute extends RouteTarget with RouteUnique {
+// Create new abstract route for your Coordinator
+abstract class AppRoute extends RouteTarget with RouteUnique {}
+
+class MyRoute extends AppRoute {
   @override
   Uri toUri() => Uri.parse('/my-route');
   

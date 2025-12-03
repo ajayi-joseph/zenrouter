@@ -22,7 +22,7 @@ The coordinator pattern provides a centralized routing system with deep linking,
 
 ## Core Concept
 
-A `Coordinator` manages multiple `NavigationPath`s and provides:
+A `Coordinator` manages multiple `StackPath`s and provides:
 1. **URI Parsing** - Converts URLs to routes
 2. **Route Resolution** - Finds the correct path for each route
 3. **Deep Linking** - Handles incoming deep links
@@ -620,7 +620,7 @@ mixin RouteLayout<T extends RouteUnique> on RouteUnique {
 }
 ```
 
-**Example - Dynamic navigation layout:**
+**Example - NavigationStack style navigation layout:**
 ```dart
 class HomeLayout extends AppRoute with RouteLayout<AppRoute> {
   @override
@@ -823,156 +823,6 @@ adb shell am start -W -a android.intent.action.VIEW \\
 coordinator.recoverRouteFromUri(
   Uri.parse('myapp://home/feed/123'),
 );
-```
-
-## Best Practices
-
-### ✅ DO: Use Sealed Classes for Routes
-
-Enable exhaustive pattern matching:
-
-```dart
-sealed class AppRoute extends RouteTarget with RouteUnique {}
-
-class HomeRoute extends AppRoute { ... }
-class ProfileRoute extends AppRoute { ... }
-
-// Compiler ensures all routes are handled
-@override
-AppRoute parseRouteFromUri(Uri uri) {
-  return switch (uri.pathSegments) {
-    [] => HomeRoute(),
-    ['profile'] => ProfileRoute(),
-    // Compiler error if you forget a route!
-  };
-}
-```
-
-### ✅ DO: Use Singletons for Stateless Hosts
-
-Hosts without state should be singletons:
-
-```dart
-class HomeHost extends AppRoute with RouteLayout {
-  static final instance = HomeHost(); // Singleton
-  
-  // No state, always the same
-}
-
-// Use the Type-based system
-coordinator.push(SomeRoute());
-// SomeRoute's layout points to HomeLayout (Type, not instance)
-```
-
-### ✅ DO: Centralize Path Definitions
-
-Define all paths in one place:
-
-```dart
-class AppCoordinator extends Coordinator<AppRoute> {
-  // All paths defined here
-  final homeStack = NavigationPath<AppRoute>('home');
-  final settingsStack = NavigationPath<AppRoute>('settings');
-  final tabIndexed = IndexedStackPath<AppRoute>([...], 'tabs');
-  
-  @override
-  List<StackPath> get paths => [root, homeStack, settingsStack, tabIndexed];
-}
-```
-
-### ✅ DO: Handle Not Found Routes
-
-Always have a fallback route:
-
-```dart
-@override
-AppRoute parseRouteFromUri(Uri uri) {
-  return switch (uri.pathSegments) {
-    [...] => ...,
-    _ => NotFoundRoute(uri: uri), // Catch-all
-  };
-}
-```
-
-### ❌ DON'T: Create New Host Instances
-
-Use singletons or stored instances:
-
-```dart
-// ❌ BAD: New instance each time
-class MyRoute extends AppRoute {
-  @override
-  Type? get layout => HomeLayout(); // ❌ Function call creates new Type each time
-}
-
-// ✅ GOOD: Type reference
-class MyRoute extends AppRoute {
-  @override
-  Type? get layout => HomeLayout; // Type reference (no parens)
-}
-```
-
-### ❌ DON'T: Access Coordinator in Route Constructors
-
-Routes should be pure data:
-
-```dart
-// ❌ BAD
-class MyRoute extends AppRoute {
-  MyRoute() {
-    coordinator.push(OtherRoute()); // Side effect in constructor
-  }
-}
-
-// ✅ GOOD
-class MyRoute extends AppRoute {
-  @override
-  Widget build(AppCoordinator coordinator, BuildContext context) {
-    return ElevatedButton(
-      onPressed: () => coordinator.push(OtherRoute()), // In handler
-      child: const Text('Navigate'),
-    );
-  }
-}
-```
-
-## Transition from Other Paradigms
-
-### From Imperative
-
-Add `RouteUnique` mixin and create a coordinator:
-
-```dart
-// Before (imperative)
-final path = NavigationPath<RouteTarget>();
-path.push(ProfileRoute());
-
-// After (coordinator)
-class ProfileRoute extends RouteTarget with RouteUnique {
-  @override
-  Uri toUri() => Uri.parse('/profile');
-  
-  @override
-  Widget build(Coordinator coordinator, BuildContext context) {
-    return ProfileScreen();
-  }
-}
-
-coordinator.push(ProfileRoute());
-```
-
-### From Declarative
-
-Use coordinator with declarative-style updates:
-
-```dart
-// Still use state-driven navigation
-void updateNavigation(AppState state) {
-  coordinator.root.replace([
-    HomeRoute(),
-    for (final item in state.items) ItemRoute(item.id),
-  ]);
-}
 ```
 
 ## See Also

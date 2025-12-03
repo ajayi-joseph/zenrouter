@@ -230,7 +230,7 @@ class AppCoordinator extends Coordinator<AppRoute> {
 }
 ```
 
-#### Example: Stack Navigation Layout (Dynamic Navigation)
+#### Example: Stack Navigation Layout (NavigationStack style)
 
 ```dart
 class SettingsLayout extends AppRoute with RouteLayout<AppRoute> {
