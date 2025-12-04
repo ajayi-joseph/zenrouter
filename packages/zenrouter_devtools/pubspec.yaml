@@ -1,5 +1,5 @@
 name: zenrouter_devtools
-description: "Devtools for ZenRouter"
+description: "Debugging Devtools for ZenRouter"
 version: 0.2.0
 homepage: https://github.com/definev/zenrouter/tree/main/packages/zenrouter_devtools
 
