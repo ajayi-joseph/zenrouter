@@ -39,7 +39,12 @@ mixin StackMutatable<T extends RouteTarget> on StackPath<T> {
     target.isPopByPath = false;
     target._path = this;
     final index = _stack.indexOf(target);
-    if (index != -1) _stack.removeAt(index);
+    if (index != -1) {
+      final removed = _stack.removeAt(index);
+
+      /// Complete the result future to prevent the route from being popped.
+      removed.completeOnResult(null, null, true);
+    }
     _stack.add(target);
     notifyListeners();
   }

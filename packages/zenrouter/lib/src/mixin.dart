@@ -168,7 +168,11 @@ mixin RouteRedirect<T extends RouteTarget> on RouteTarget {
       // If redirect returns null, do nothing
       if (newTarget == null) return route;
       if (newTarget == target) break;
-      if (newTarget is T) target = newTarget;
+      if (newTarget is T) {
+        /// Complete the result future to prevent the route from being popped.
+        target.completeOnResult(null, null, true);
+        target = newTarget;
+      }
     }
     return target;
   }

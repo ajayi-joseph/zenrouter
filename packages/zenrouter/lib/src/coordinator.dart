@@ -235,7 +235,7 @@ abstract class Coordinator<T extends RouteUnique> with ChangeNotifier {
   }
 
   /// Pops the last route from the nearest dynamic path.
-  void pop() {
+  void pop([Object? result]) {
     // Get all dynamic paths from the active layout paths
     final dynamicPaths = activeLayoutPaths.whereType<NavigationPath>().toList();
 
@@ -243,7 +243,7 @@ abstract class Coordinator<T extends RouteUnique> with ChangeNotifier {
     for (var i = dynamicPaths.length - 1; i >= 0; i--) {
       final path = dynamicPaths[i];
       if (path.stack.length >= 2) {
-        path.pop();
+        path.pop(result);
         return;
       }
     }
