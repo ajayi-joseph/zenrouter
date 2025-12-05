@@ -1,0 +1,489 @@
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:zenrouter/zenrouter.dart';
+
+// ============================================================================
+// Test Coordinator
+// ============================================================================
+
+/// Minimal coordinator for testing
+class TestCoordinator extends Coordinator<TestRoute> {
+  @override
+  void defineLayout() {}
+
+  @override
+  List<StackPath> get paths => [root];
+
+  @override
+  TestRoute parseRouteFromUri(Uri uri) {
+    return switch (uri.pathSegments) {
+      [final id] => TestRoute(id),
+      _ => TestRoute('default'),
+    };
+  }
+}
+
+// ============================================================================
+// Test Route Definitions
+// ============================================================================
+
+/// Test route with tracking for result completion
+class TestRoute extends RouteTarget with RouteUnique {
+  TestRoute(this.id);
+  final String id;
+
+  bool resultCompleted = false;
+  Object? resultValue;
+
+  @override
+  void completeOnResult(
+    Object? result,
+    Coordinator<RouteUnique>? coordinator, [
+    bool failSilent = false,
+  ]) {
+    resultCompleted = true;
+    resultValue = result;
+    super.completeOnResult(result, coordinator, failSilent);
+  }
+
+  @override
+  List<Object?> get props => [id];
+
+  @override
+  Uri toUri() => Uri.parse('/$id');
+
+  @override
+  Widget build(Coordinator coordinator, BuildContext context) {
+    return const Placeholder();
+  }
+
+  @override
+  String toString() => 'TestRoute($id)';
+}
+
+/// Test route that redirects to another route
+class RedirectRoute extends RouteTarget
+    with RouteUnique, RouteRedirect<TestRoute> {
+  RedirectRoute({required this.redirectToId});
+
+  final String redirectToId;
+  bool resultCompleted = false;
+  Object? resultValue;
+
+  @override
+  void completeOnResult(
+    Object? result,
+    Coordinator<RouteUnique>? coordinator, [
+    bool failSilent = false,
+  ]) {
+    resultCompleted = true;
+    resultValue = result;
+    super.completeOnResult(result, coordinator, failSilent);
+  }
+
+  @override
+  FutureOr<TestRoute?> redirect() {
+    return TestRoute(redirectToId);
+  }
+
+  @override
+  List<Object?> get props => [redirectToId];
+
+  @override
+  Uri toUri() => Uri.parse('/redirect/$redirectToId');
+
+  @override
+  Widget build(Coordinator coordinator, BuildContext context) {
+    return const Placeholder();
+  }
+
+  @override
+  String toString() => 'RedirectRoute(to: $redirectToId)';
+}
+
+/// Test route that chains to another redirect
+class ChainedRedirectRoute extends RouteTarget
+    with RouteUnique, RouteRedirect<RouteTarget> {
+  ChainedRedirectRoute({required this.nextRedirect});
+
+  final RedirectRoute nextRedirect;
+  bool resultCompleted = false;
+
+  @override
+  void completeOnResult(
+    Object? result,
+    Coordinator<RouteUnique>? coordinator, [
+    bool failSilent = false,
+  ]) {
+    resultCompleted = true;
+    super.completeOnResult(result, coordinator, failSilent);
+  }
+
+  @override
+  FutureOr<RouteTarget?> redirect() => nextRedirect;
+
+  @override
+  Uri toUri() => Uri.parse('/chained');
+
+  @override
+  Widget build(Coordinator coordinator, BuildContext context) {
+    return const Placeholder();
+  }
+}
+
+/// Test route that redirects to null (stays on current route)
+class NullRedirectRoute extends RouteTarget
+    with RouteUnique, RouteRedirect<TestRoute> {
+  NullRedirectRoute();
+
+  bool resultCompleted = false;
+
+  @override
+  void completeOnResult(
+    Object? result,
+    Coordinator<RouteUnique>? coordinator, [
+    bool failSilent = false,
+  ]) {
+    resultCompleted = true;
+    super.completeOnResult(result, coordinator, failSilent);
+  }
+
+  @override
+  FutureOr<TestRoute?> redirect() => null;
+
+  @override
+  Uri toUri() => Uri.parse('/null-redirect');
+
+  @override
+  Widget build(Coordinator coordinator, BuildContext context) {
+    return const Placeholder();
+  }
+}
+
+/// Test route that redirects to itself
+class SelfRedirectRoute extends RouteTarget
+    with RouteUnique, RouteRedirect<SelfRedirectRoute> {
+  SelfRedirectRoute();
+
+  bool resultCompleted = false;
+
+  @override
+  void completeOnResult(
+    Object? result,
+    Coordinator<RouteUnique>? coordinator, [
+    bool failSilent = false,
+  ]) {
+    resultCompleted = true;
+    super.completeOnResult(result, coordinator, failSilent);
+  }
+
+  @override
+  FutureOr<SelfRedirectRoute?> redirect() => this;
+
+  @override
+  Uri toUri() => Uri.parse('/self-redirect');
+
+  @override
+  Widget build(Coordinator coordinator, BuildContext context) {
+    return const Placeholder();
+  }
+}
+
+// ============================================================================
+// Tests
+// ============================================================================
+
+void main() {
+  group('pushOrMoveToTop - Route Completion', () {
+    test('completes result future when moving existing route to top', () async {
+      final path = NavigationPath<TestRoute>('test');
+
+      final routeA = TestRoute('a');
+      final routeB = TestRoute('b');
+      final routeADuplicate = TestRoute('a'); // Same id, equals routeA
+
+      // Push initial routes
+      path.push(routeA);
+      path.push(routeB);
+
+      await Future.delayed(const Duration(milliseconds: 100));
+
+      expect(path.stack.length, 2);
+      expect(routeA.resultCompleted, isFalse);
+
+      // Push or move to top - routeA should be moved, its future should be completed
+      await path.pushOrMoveToTop(routeADuplicate);
+
+      expect(path.stack.length, 2);
+      expect(path.stack.last.id, 'a');
+      expect(routeA.resultCompleted, isTrue);
+      expect(routeA.resultValue, isNull);
+    });
+
+    test('does not complete result future when pushing new route', () async {
+      final path = NavigationPath<TestRoute>('test');
+
+      final routeA = TestRoute('a');
+      final routeB = TestRoute('b');
+
+      path.push(routeA);
+      path.pushOrMoveToTop(routeB);
+      await Future.delayed(const Duration(milliseconds: 100));
+
+      expect(path.stack.length, 2);
+      expect(routeA.resultCompleted, isFalse);
+      expect(routeB.resultCompleted, isFalse);
+    });
+
+    test('completes removed route future with null result', () async {
+      final path = NavigationPath<TestRoute>('test');
+
+      final routeA = TestRoute('a');
+      final routeB = TestRoute('b');
+      final routeC = TestRoute('c');
+
+      path.push(routeA);
+      path.push(routeB);
+      path.push(routeC);
+      await Future.delayed(const Duration(milliseconds: 100));
+
+      expect(path.stack.length, 3);
+
+      // Move routeB to top
+      path.pushOrMoveToTop(TestRoute('b'));
+      await Future.delayed(const Duration(milliseconds: 100));
+
+      expect(path.stack.length, 3);
+      expect(path.stack.map((r) => r.id).toList(), ['a', 'c', 'b']);
+      expect(routeB.resultCompleted, isTrue);
+    });
+
+    test('handles multiple moveToTop operations correctly', () async {
+      final path = NavigationPath<TestRoute>('test');
+
+      final routes = [TestRoute('a'), TestRoute('b'), TestRoute('c')];
+
+      for (final route in routes) {
+        path.push(route);
+      }
+      await Future.delayed(const Duration(milliseconds: 100));
+
+      // Move 'a' to top
+      path.pushOrMoveToTop(TestRoute('a'));
+      await Future.delayed(const Duration(milliseconds: 100));
+      expect(routes[0].resultCompleted, isTrue);
+      expect(path.stack.map((r) => r.id).toList(), ['b', 'c', 'a']);
+
+      // Move 'b' to top
+      path.pushOrMoveToTop(TestRoute('b'));
+      await Future.delayed(const Duration(milliseconds: 100));
+      expect(routes[1].resultCompleted, isTrue);
+      expect(path.stack.map((r) => r.id).toList(), ['c', 'a', 'b']);
+    });
+
+    test('pushOrMoveToTop on empty stack adds route', () async {
+      final path = NavigationPath<TestRoute>('test');
+
+      final route = TestRoute('a');
+      path.pushOrMoveToTop(route);
+      await Future.delayed(const Duration(milliseconds: 100));
+
+      expect(path.stack.length, 1);
+      expect(path.stack.first.id, 'a');
+      expect(route.resultCompleted, isFalse);
+    });
+
+    test('pushing same route that is already on top still moves it', () async {
+      final path = NavigationPath<TestRoute>('test');
+
+      final routeA = TestRoute('a');
+      path.push(routeA);
+
+      // Push same route again via pushOrMoveToTop
+      path.pushOrMoveToTop(TestRoute('a'));
+      await Future.delayed(const Duration(milliseconds: 100));
+
+      // The original should be completed and replaced
+      expect(routeA.resultCompleted, isTrue);
+      expect(path.stack.length, 1);
+    });
+  });
+
+  group('RouteRedirect.resolve - Route Completion', () {
+    test('completes original route when redirect is resolved', () async {
+      final redirectRoute = RedirectRoute(redirectToId: 'target');
+
+      // Must use RouteTarget as type parameter since RedirectRoute.redirect()
+      // returns TestRoute which is not a subtype of RedirectRoute
+      final result = await RouteRedirect.resolve<RouteTarget>(redirectRoute);
+
+      expect(result, isA<TestRoute>());
+      expect((result as TestRoute).id, 'target');
+      expect(redirectRoute.resultCompleted, isTrue);
+      expect(redirectRoute.resultValue, isNull);
+    });
+
+    test('does not complete route when redirect returns null', () async {
+      final nullRedirect = NullRedirectRoute();
+
+      final result = await RouteRedirect.resolve<RouteTarget>(nullRedirect);
+
+      // Should return original route
+      expect(result, same(nullRedirect));
+      expect(nullRedirect.resultCompleted, isFalse);
+    });
+
+    test('does not complete route when redirect returns itself', () async {
+      final selfRedirect = SelfRedirectRoute();
+
+      final result = await RouteRedirect.resolve<RouteTarget>(selfRedirect);
+
+      // Should return the same route, no completion
+      expect(result, same(selfRedirect));
+      expect(selfRedirect.resultCompleted, isFalse);
+    });
+
+    test('completes all intermediate routes in redirect chain', () async {
+      final innerRedirect = RedirectRoute(redirectToId: 'final');
+      final outerRedirect = ChainedRedirectRoute(nextRedirect: innerRedirect);
+
+      final result = await RouteRedirect.resolve<RouteTarget>(outerRedirect);
+
+      expect(result, isA<TestRoute>());
+      expect((result as TestRoute).id, 'final');
+      expect(outerRedirect.resultCompleted, isTrue);
+      expect(innerRedirect.resultCompleted, isTrue);
+    });
+  });
+
+  group('pushOrMoveToTop with RouteRedirect', () {
+    test('handles redirect in pushOrMoveToTop', () async {
+      final path = NavigationPath<RouteTarget>('test');
+
+      final routeA = TestRoute('a');
+      path.push(routeA);
+
+      // Push redirect that resolves to a new route
+      final redirect = RedirectRoute(redirectToId: 'b');
+      path.pushOrMoveToTop(redirect);
+      await Future.delayed(const Duration(milliseconds: 100));
+
+      expect(path.stack.length, 2);
+      expect((path.stack.last as TestRoute).id, 'b');
+      expect(redirect.resultCompleted, isTrue);
+    });
+
+    test('pushOrMoveToTop with redirect to existing route moves it', () async {
+      final path = NavigationPath<RouteTarget>('test');
+
+      final routeA = TestRoute('a');
+      final routeB = TestRoute('b');
+      path.push(routeA);
+      path.push(routeB);
+      await Future.delayed(const Duration(milliseconds: 100));
+
+      // Push redirect that resolves to 'a' (already in stack)
+      final redirect = RedirectRoute(redirectToId: 'a');
+      path.pushOrMoveToTop(redirect);
+      await Future.delayed(const Duration(milliseconds: 100));
+
+      // Redirect completes, original 'a' completes, new 'a' on top
+      expect(redirect.resultCompleted, isTrue);
+      expect(routeA.resultCompleted, isTrue);
+      expect(path.stack.length, 2);
+      expect((path.stack.last as TestRoute).id, 'a');
+    });
+  });
+
+  group('NavigationPath.reset - Route Completion', () {
+    test('completes all routes when path is reset', () async {
+      final path = NavigationPath<TestRoute>('test');
+
+      final routes = [TestRoute('a'), TestRoute('b'), TestRoute('c')];
+
+      for (final route in routes) {
+        path.push(route);
+      }
+      await Future.delayed(const Duration(milliseconds: 100));
+
+      path.reset();
+
+      for (final route in routes) {
+        expect(route.resultCompleted, isTrue);
+      }
+      expect(path.stack, isEmpty);
+    });
+  });
+
+  group('Memory leak prevention', () {
+    // testWidgets(
+    //   'route completer does not hold reference after pop with result',
+    //   (tester) async {
+    //     final coordinator = TestCoordinator();
+    //     final path = NavigationPath<TestRoute>('test');
+    //     final route = TestRoute('a');
+    //     final routeTwo = TestRoute('b');
+    //     path.push(route);
+    //     final future = path.push(routeTwo);
+
+    //     await tester.pumpWidget(
+    //       MaterialApp.router(
+    //         routerDelegate: coordinator.routerDelegate,
+    //         routeInformationParser: coordinator.routeInformationParser,
+    //       ),
+    //     );
+    //     await tester.pumpAndSettle();
+
+    //     // Pop the route with result
+    //     coordinator.pop('result');
+    //     await tester.pumpAndSettle();
+
+    //     // The route's future should complete with the result
+    //     final result = await future;
+    //     expect(result, 'result');
+    //     expect(route.resultCompleted, isFalse);
+    //     expect(routeTwo.resultCompleted, isTrue);
+    //   },
+    // );
+
+    test('pushOrMoveToTop completes old route allowing GC', () async {
+      final path = NavigationPath<TestRoute>('test');
+
+      // Push route and hold reference to its future
+      final route = TestRoute('a');
+      final routeFuture = path.push(route);
+
+      // Push another route
+      path.push(TestRoute('b'));
+      await Future.delayed(const Duration(milliseconds: 100));
+
+      // Move original route to top (creates new instance)
+      path.pushOrMoveToTop(TestRoute('a'));
+      await Future.delayed(const Duration(milliseconds: 100));
+
+      // Original route's future should be completed
+      expect(route.resultCompleted, isTrue);
+
+      // Future should resolve with null (not hang forever)
+      final result = await routeFuture;
+      expect(result, isNull);
+    });
+
+    test('chained redirects complete all intermediate futures', () async {
+      // This tests that we don't leak completers in redirect chains
+      final innerRedirect = RedirectRoute(redirectToId: 'final');
+      final outerRedirect = ChainedRedirectRoute(nextRedirect: innerRedirect);
+
+      final result = await RouteRedirect.resolve<RouteTarget>(outerRedirect);
+
+      // All intermediate routes should have their completers resolved
+      expect(outerRedirect.resultCompleted, isTrue);
+      expect(innerRedirect.resultCompleted, isTrue);
+
+      // Final route should not be completed (it's the active route)
+      expect((result as TestRoute).resultCompleted, isFalse);
+    });
+  });
+}
