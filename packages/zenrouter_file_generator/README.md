@@ -16,15 +16,16 @@ This package is part of the [ZenRouter](https://github.com/definev/zenrouter/blo
 
 ## Installation
 
-Add `zenrouter_file_generator` and `zenrouter` to your `pubspec.yaml`:
+Add `zenrouter_file_generator`, `zenrouter_file_annotation` and `zenrouter` to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  zenrouter_file_generator: ^0.2.0
   zenrouter: ^0.2.1
+  zenrouter_file_annotation: ^0.2.1
 
 dev_dependencies:
   build_runner: ^2.4.0
+  zenrouter_file_generator: ^0.2.1
 ```
 
 ## Quick Start
@@ -82,7 +83,7 @@ Files named with brackets create dynamic route parameters:
 ```dart
 // lib/routes/profile/[id].dart
 import 'package:flutter/material.dart';
-import 'package:zenrouter_file_generator/zenrouter_file_generator.dart';
+import 'package:zenrouter_file_annotation/zenrouter_file_annotation.dart';
 import 'routes.zen.dart';
 
 part '[id].g.dart';
@@ -108,7 +109,7 @@ Layouts wrap child routes in a common UI structure:
 ```dart
 // lib/routes/tabs/_layout.dart
 import 'package:flutter/material.dart';
-import 'package:zenrouter_file_generator/zenrouter_file_generator.dart';
+import 'package:zenrouter_file_annotation/zenrouter_file_annotation.dart';
 import 'routes.zen.dart';
 
 part '_layout.g.dart';
@@ -220,7 +221,7 @@ lib/routes/
 ```dart
 // lib/routes/(auth)/_layout.dart
 import 'package:flutter/material.dart';
-import 'package:zenrouter_file_generator/zenrouter_file_generator.dart';
+import 'package:zenrouter_file_annotation/zenrouter_file_annotation.dart';
 import 'package:zenrouter/zenrouter.dart';
 
 import '../routes.zen.dart';
@@ -254,7 +255,7 @@ class AuthLayout extends _$AuthLayout {
 ```dart
 // lib/routes/(auth)/login.dart
 import 'package:flutter/material.dart';
-import 'package:zenrouter_file_generator/zenrouter_file_generator.dart';
+import 'package:zenrouter_file_annotation/zenrouter_file_annotation.dart';
 
 import '../routes.zen.dart';
 
@@ -310,7 +311,7 @@ Enable advanced behaviors with annotation parameters:
 
 ```dart
 import 'package:zenrouter/zenrouter.dart';
-import 'package:zenrouter_file_generator/zenrouter_file_generator.dart';
+import 'package:zenrouter_file_annotation/zenrouter_file_annotation.dart';
 
 @ZenRoute(
   guard: true,      // RouteGuard - control pop behavior
@@ -531,7 +532,7 @@ Customize the generated coordinator by creating `lib/routes/_coordinator.dart`:
 
 ```dart
 // lib/routes/_coordinator.dart
-import 'package:zenrouter_file_generator/zenrouter_file_generator.dart';
+import 'package:zenrouter_file_annotation/zenrouter_file_annotation.dart';
 
 @ZenCoordinator(
   name: 'MyAppCoordinator',
