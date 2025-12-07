@@ -23,6 +23,8 @@ Let's dive into the core concepts of the Coordinator.
 
 ## Example app
 
+The code of example app can be found [here](https://github.com/definev/zenrouter/tree/main/packages/zenrouter/doc/paradigms/coordinator/example). You can go to the `example` folder and run `flutter run` to see the final result or follow step by step guide below.
+
 ### Create the project
 
 Let's create your project with the `flutter create` command.
