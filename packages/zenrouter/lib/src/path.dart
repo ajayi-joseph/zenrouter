@@ -39,7 +39,7 @@ mixin StackMutatable<T extends RouteTarget> on StackPath<T> {
     target.isPopByPath = false;
     target._path = this;
     final index = _stack.indexOf(target);
-    if (index == _stack.length - 1) {
+    if (_stack.isNotEmpty && index == _stack.length - 1) {
       element._onResult = _stack.last._onResult;
       return;
     }
