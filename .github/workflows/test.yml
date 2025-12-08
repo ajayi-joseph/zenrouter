@@ -132,25 +132,103 @@ jobs:
           EOF
         continue-on-error: true
 
-      - name: Update Coverage Badge (zenrouter)
+      - name: Generate Coverage Badges
         if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
-        uses: we-cli/coverage-badge-action@main
-        with:
-          coverage_file: coverage/zenrouter-coverage-summary.json
-          badge_name: coverage-zenrouter
+        run: |
+          python3 << 'EOF'
+          import json
+          import os
+          
+          def get_color(pct):
+              """Get badge color based on coverage percentage"""
+              if pct >= 90: return "4c1"
+              elif pct >= 75: return "97ca00"
+              elif pct >= 60: return "a4a61d"
+              elif pct >= 40: return "dfb317"
+              else: return "e05d44"
+          
+          def generate_badge_svg(coverage_pct):
+              """Generate shields.io style SVG badge"""
+              color = get_color(coverage_pct)
+              pct_str = f"{coverage_pct:.1f}%"
+              
+              # Calculate text width for dynamic badge width
+              label_width = 70
+              value_width = len(pct_str) * 6 + 10
+              total_width = label_width + value_width
+              
+              svg = f'''<svg xmlns="http://www.w3.org/2000/svg" width="{total_width}" height="20" role="img" aria-label="Coverage: {pct_str}">
+            <title>Coverage: {pct_str}</title>
+            <linearGradient id="s" x2="0" y2="100%">
+              <stop offset="0" stop-color="#bbb" stop-opacity=".1"/>
+              <stop offset="1" stop-opacity=".1"/>
+            </linearGradient>
+            <clipPath id="r">
+              <rect width="{total_width}" height="20" rx="3" fill="#fff"/>
+            </clipPath>
+            <g clip-path="url(#r)">
+              <rect width="{label_width}" height="20" fill="#555"/>
+              <rect x="{label_width}" width="{value_width}" height="20" fill="#{color}"/>
+              <rect width="{total_width}" height="20" fill="url(#s)"/>
+            </g>
+            <g fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" font-size="11">
+              <text x="{label_width/2}" y="15" fill="#010101" fill-opacity=".3">Coverage</text>
+              <text x="{label_width/2}" y="14">Coverage</text>
+              <text x="{label_width + value_width/2}" y="15" fill="#010101" fill-opacity=".3">{pct_str}</text>
+              <text x="{label_width + value_width/2}" y="14">{pct_str}</text>
+            </g>
+          </svg>'''
+              return svg
+          
+          # Generate badges for each package
+          packages = [
+              ('zenrouter', 'coverage/zenrouter-coverage-summary.json', 'coverage-zenrouter'),
+              ('zenrouter_file_generator', 'coverage/zenrouter_file_generator-coverage-summary.json', 'coverage-zenrouter_file_generator'),
+              ('overall', 'coverage/coverage-summary.json', 'coverage')
+          ]
+          
+          os.makedirs('badges', exist_ok=True)
+          
+          for name, file_path, badge_name in packages:
+              if os.path.exists(file_path):
+                  with open(file_path, 'r') as f:
+                      data = json.load(f)
+                      pct = data['total']['lines']['pct']
+                      svg = generate_badge_svg(pct)
+                      
+                      badge_path = f'badges/{badge_name}.svg'
+                      with open(badge_path, 'w') as f:
+                          f.write(svg)
+                      print(f'Generated {badge_path}: {pct}%')
+          EOF
+        continue-on-error: true
 
-      - name: Update Coverage Badge (zenrouter_file_generator)
+      - name: Commit Badges to gh-pages
         if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
-        uses: we-cli/coverage-badge-action@main
-        with:
-          coverage_file: coverage/zenrouter_file_generator-coverage-summary.json
-          badge_name: coverage-zenrouter_file_generator
-
-      - name: Update Coverage Badge (overall)
-        if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
-        uses: we-cli/coverage-badge-action@main
-        with:
-          coverage_file: coverage/coverage-summary.json
+        run: |
+          # Store badges temporarily
+          mkdir -p /tmp/badges
+          cp badges/*.svg /tmp/badges/ 2>/dev/null || true
+          
+          # Switch to gh-pages branch
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git fetch origin gh-pages:gh-pages 2>/dev/null || true
+          git checkout gh-pages || git checkout --orphan gh-pages
+          
+          # Copy badges to gh-pages
+          mkdir -p badges
+          cp /tmp/badges/*.svg badges/ 2>/dev/null || true
+          
+          # Commit and push
+          git add badges/*.svg
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Update coverage badges [skip ci]"
+            git push origin gh-pages
+          fi
+        continue-on-error: true
 
       - name: Comment PR Coverage
         if: github.event_name == 'pull_request'
