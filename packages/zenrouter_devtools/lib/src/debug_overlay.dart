@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:zenrouter/zenrouter.dart';
 
 import 'coordinator_debug.dart';
+import 'tabs/tabs.dart';
 import 'widgets/widgets.dart';
 
 // =============================================================================
@@ -154,14 +155,15 @@ class _DebugOverlayState<T extends RouteUnique> extends State<DebugOverlay<T>> {
                   const _Divider(),
                   Expanded(
                     child: switch (_selectedTabIndex) {
-                      0 => _PathListView<T>(
+                      0 => ProblemsTab<T>(coordinator: widget.coordinator),
+                      1 => PathListView<T>(
                         coordinator: widget.coordinator,
                         onShowToast: _showToast,
                       ),
-                      1 => _ActiveLayoutsListView<T>(
+                      2 => ActiveLayoutsListView<T>(
                         coordinator: widget.coordinator,
                       ),
-                      _ => _DebugRoutesListView<T>(
+                      _ => DebugRoutesListView<T>(
                         coordinator: widget.coordinator,
                         onShowToast: _showToast,
                       ),
@@ -195,12 +197,11 @@ class _DebugOverlayState<T extends RouteUnique> extends State<DebugOverlay<T>> {
               ConnectionIndicator(),
               SizedBox(width: DebugTheme.spacing),
               Text(
-                'ZenRouter Debugger',
+                'ZenRouter Devtools',
                 style: TextStyle(
                   color: DebugTheme.textPrimary,
                   fontSize: DebugTheme.fontSizeLg,
                   fontWeight: FontWeight.w600,
-                  fontFamily: 'Inter',
                   decoration: TextDecoration.none,
                 ),
               ),
@@ -231,7 +232,8 @@ class _DebugOverlayState<T extends RouteUnique> extends State<DebugOverlay<T>> {
         children: [
           Expanded(
             child: TabButton(
-              label: 'Inspect',
+              label: 'Problems',
+              count: widget.coordinator.problems,
               isSelected: _selectedTabIndex == 0,
               onTap: () => setState(() => _selectedTabIndex = 0),
             ),
@@ -239,7 +241,7 @@ class _DebugOverlayState<T extends RouteUnique> extends State<DebugOverlay<T>> {
           const _VerticalDivider(),
           Expanded(
             child: TabButton(
-              label: 'Active',
+              label: 'Inspect',
               isSelected: _selectedTabIndex == 1,
               onTap: () => setState(() => _selectedTabIndex = 1),
             ),
@@ -247,12 +249,21 @@ class _DebugOverlayState<T extends RouteUnique> extends State<DebugOverlay<T>> {
           const _VerticalDivider(),
           Expanded(
             child: TabButton(
-              label: 'Routes',
-              count: widget.coordinator.problems,
+              label: 'Active',
               isSelected: _selectedTabIndex == 2,
               onTap: () => setState(() => _selectedTabIndex = 2),
             ),
           ),
+          if (widget.coordinator.debugRoutes.isNotEmpty) ...[
+            const _VerticalDivider(),
+            Expanded(
+              child: TabButton(
+                label: 'Routes',
+                isSelected: _selectedTabIndex == 3,
+                onTap: () => setState(() => _selectedTabIndex = 3),
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -459,679 +470,5 @@ class _VerticalDivider extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(width: 1, color: DebugTheme.border);
-  }
-}
-
-// =============================================================================
-// PATH LIST VIEW
-// =============================================================================
-
-class _PathListView<T extends RouteUnique> extends StatelessWidget {
-  const _PathListView({required this.coordinator, required this.onShowToast});
-
-  final CoordinatorDebug<T> coordinator;
-  final void Function(String message, {ToastType type}) onShowToast;
-
-  @override
-  Widget build(BuildContext context) {
-    return ListenableBuilder(
-      listenable: coordinator,
-      builder: (context, _) {
-        return ListView.builder(
-          padding: EdgeInsets.zero,
-          itemCount: coordinator.paths.length,
-          itemBuilder: (context, index) {
-            final path = coordinator.paths[index];
-            final isActive = path == coordinator.activeLayoutPaths.last;
-            final isReadOnly = path is IndexedStackPath;
-
-            return _PathItemView<T>(
-              coordinator: coordinator,
-              path: path,
-              isActive: isActive,
-              isReadOnly: isReadOnly,
-              onShowToast: onShowToast,
-            );
-          },
-        );
-      },
-    );
-  }
-}
-
-// =============================================================================
-// PATH ITEM VIEW
-// =============================================================================
-
-class _PathItemView<T extends RouteUnique> extends StatelessWidget {
-  const _PathItemView({
-    required this.coordinator,
-    required this.path,
-    required this.isActive,
-    required this.isReadOnly,
-    required this.onShowToast,
-  });
-
-  final CoordinatorDebug<T> coordinator;
-  final StackPath path;
-  final bool isActive;
-  final bool isReadOnly;
-  final void Function(String message, {ToastType type}) onShowToast;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: DebugTheme.borderDark)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildPathHeader(),
-          if (path.stack.isNotEmpty) ..._buildRouteItems(),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPathHeader() {
-    return Container(
-      padding: const EdgeInsets.only(
-        left: DebugTheme.spacingMd,
-        right: DebugTheme.spacing,
-        top: DebugTheme.spacing,
-        bottom: DebugTheme.spacing,
-      ),
-      color: isActive ? DebugTheme.backgroundLight : const Color(0x00000000),
-      child: Row(
-        children: [
-          Icon(
-            isReadOnly ? CupertinoIcons.lock : CupertinoIcons.folder_open,
-            color: isActive ? DebugTheme.textPrimary : DebugTheme.textDisabled,
-            size: 14,
-          ),
-          const SizedBox(width: DebugTheme.spacing),
-          Expanded(
-            child: Row(
-              children: [
-                Text(
-                  coordinator.debugLabel(path),
-                  style: TextStyle(
-                    color:
-                        isActive
-                            ? DebugTheme.textPrimary
-                            : DebugTheme.textMuted,
-                    fontSize: DebugTheme.fontSizeMd,
-                    fontWeight: FontWeight.w500,
-                    decoration: TextDecoration.none,
-                  ),
-                ),
-                if (isActive) ...[
-                  const SizedBox(width: DebugTheme.spacing),
-                  const ActiveBadge(),
-                ],
-                if (isReadOnly) ...[const Spacer(), const StatefulBadge()],
-              ],
-            ),
-          ),
-          // Only show pop button for non-read-only paths
-          if (path.stack.isNotEmpty && path is NavigationPath)
-            SmallIconButton(
-              icon: CupertinoIcons.arrow_left,
-              onTap:
-                  path.stack.length > 1
-                      ? () async {
-                        final route = path.stack.last;
-                        await (path as NavigationPath).pop();
-                        final routeName = () {
-                          try {
-                            if (route is RouteLayout) {
-                              final shellPath = route.resolvePath(coordinator);
-                              final debugLabel = coordinator.debugLabel(
-                                shellPath,
-                              );
-                              return 'all $debugLabel';
-                            }
-                            return (route as RouteLayout).toUri();
-                          } catch (_) {
-                            return route.toString();
-                          }
-                        }();
-                        onShowToast('Popped $routeName', type: ToastType.pop);
-                      }
-                      : null,
-              color:
-                  path.stack.length > 1
-                      ? DebugTheme.textPrimary
-                      : DebugTheme.textDisabled,
-            ),
-        ],
-      ),
-    );
-  }
-
-  List<Widget> _buildRouteItems() {
-    if (path case IndexedStackPath path) {
-      return path.stack.indexed.map((data) {
-        final (routeIndex, route) = data;
-        final readOnlyPath = path;
-        final isRouteActive =
-            isActive && routeIndex == readOnlyPath.activeIndex;
-
-        return _ReadOnlyRouteItem(
-          route: route as RouteUnique,
-          routeIndex: routeIndex,
-          isRouteActive: isRouteActive,
-          readOnlyPath: readOnlyPath,
-          onShowToast: onShowToast,
-        );
-      }).toList();
-    }
-
-    return path.stack.reversed.indexed.map((data) {
-      final (index, route) = data;
-      final isTop = index == 0;
-      final isRouteActive = isActive && isTop;
-
-      return _NavigationRouteItem(
-        route: route as RouteUnique,
-        isTop: isTop,
-        isRouteActive: isRouteActive,
-        path: path,
-        onShowToast: onShowToast,
-      );
-    }).toList();
-  }
-}
-
-// =============================================================================
-// READ-ONLY ROUTE ITEM (IndexedStackPath)
-// =============================================================================
-
-class _ReadOnlyRouteItem extends StatefulWidget {
-  const _ReadOnlyRouteItem({
-    required this.route,
-    required this.routeIndex,
-    required this.isRouteActive,
-    required this.readOnlyPath,
-    required this.onShowToast,
-  });
-
-  final RouteUnique route;
-  final int routeIndex;
-  final bool isRouteActive;
-  final IndexedStackPath readOnlyPath;
-  final void Function(String message, {ToastType type}) onShowToast;
-
-  @override
-  State<_ReadOnlyRouteItem> createState() => _ReadOnlyRouteItemState();
-}
-
-class _ReadOnlyRouteItemState extends State<_ReadOnlyRouteItem> {
-  bool _isHovered = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return MouseRegion(
-      onEnter: (_) => setState(() => _isHovered = true),
-      onExit: (_) => setState(() => _isHovered = false),
-      child: GestureDetector(
-        onTap: () async {
-          try {
-            await widget.readOnlyPath.goToIndexed(widget.routeIndex);
-            widget.onShowToast(
-              'Navigated to ${widget.route}',
-              type: ToastType.push,
-            );
-          } catch (e) {
-            widget.onShowToast('Error: $e', type: ToastType.error);
-          }
-        },
-        child: Container(
-          padding: const EdgeInsets.only(
-            left: 34,
-            right: DebugTheme.spacing,
-            top: DebugTheme.spacingSm,
-            bottom: DebugTheme.spacingSm,
-          ),
-          color:
-              widget.isRouteActive || _isHovered
-                  ? DebugTheme.backgroundDark
-                  : const Color(0x00000000),
-          child: Row(
-            children: [
-              Expanded(
-                child: Row(
-                  children: [
-                    Flexible(
-                      child: Text(
-                        widget.route.toString(),
-                        style: TextStyle(
-                          color:
-                              widget.isRouteActive
-                                  ? DebugTheme.textPrimary
-                                  : DebugTheme.textSecondary,
-                          fontSize: DebugTheme.fontSize,
-                          fontWeight:
-                              widget.isRouteActive
-                                  ? FontWeight.w600
-                                  : FontWeight.normal,
-                          decoration: TextDecoration.none,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    if (widget.isRouteActive) ...[
-                      const SizedBox(width: DebugTheme.spacing),
-                      const ActiveIndicator(),
-                    ],
-                  ],
-                ),
-              ),
-              Icon(
-                widget.isRouteActive
-                    ? CupertinoIcons.circle_fill
-                    : CupertinoIcons.circle,
-                size: 16,
-                color:
-                    widget.isRouteActive
-                        ? const Color(0xFF2196F3)
-                        : DebugTheme.textDisabled,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// =============================================================================
-// NAVIGATION ROUTE ITEM (NavigationPath)
-// =============================================================================
-
-class _NavigationRouteItem extends StatelessWidget {
-  const _NavigationRouteItem({
-    required this.route,
-    required this.isTop,
-    required this.isRouteActive,
-    required this.path,
-    required this.onShowToast,
-  });
-
-  final RouteUnique route;
-  final bool isTop;
-  final bool isRouteActive;
-  final StackPath path;
-  final void Function(String message, {ToastType type}) onShowToast;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.only(
-        left: 34,
-        right: DebugTheme.spacing,
-        top: DebugTheme.spacingSm,
-        bottom: DebugTheme.spacingSm,
-      ),
-      color: isTop ? DebugTheme.backgroundDark : const Color(0x00000000),
-      child: Row(
-        children: [
-          Expanded(
-            child: Row(
-              children: [
-                Flexible(
-                  child: Text(
-                    route.toString(),
-                    style: TextStyle(
-                      color:
-                          isTop
-                              ? DebugTheme.textPrimary
-                              : DebugTheme.textSecondary,
-                      fontSize: DebugTheme.fontSize,
-                      fontFamily: 'monospace',
-                      fontWeight: isTop ? FontWeight.w600 : FontWeight.normal,
-                      decoration: TextDecoration.none,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                if (isRouteActive) ...[
-                  const SizedBox(width: DebugTheme.spacing),
-                  const ActiveIndicator(),
-                ],
-              ],
-            ),
-          ),
-          if (path is NavigationPath)
-            SmallIconButton(
-              icon: CupertinoIcons.xmark,
-              onTap:
-                  path.stack.length > 1
-                      ? () {
-                        (path as NavigationPath).remove(route);
-                        onShowToast('Removed $route', type: ToastType.remove);
-                      }
-                      : null,
-              color: const Color(0xFFEF9A9A),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-// =============================================================================
-// ACTIVE LAYOUTS LIST VIEW
-// =============================================================================
-
-class _ActiveLayoutsListView<T extends RouteUnique> extends StatelessWidget {
-  const _ActiveLayoutsListView({required this.coordinator});
-
-  final CoordinatorDebug<T> coordinator;
-
-  @override
-  Widget build(BuildContext context) {
-    return ListenableBuilder(
-      listenable: coordinator,
-      builder: (context, _) {
-        final activeLayouts = coordinator.activeLayouts;
-        final activeLayoutPaths = coordinator.activeLayoutPaths;
-
-        if (activeLayouts.isEmpty) {
-          return const Center(
-            child: Text(
-              'No active layouts.\nRoot path is the current active path.',
-              style: TextStyle(
-                color: DebugTheme.textDisabled,
-                fontSize: DebugTheme.fontSizeMd,
-                decoration: TextDecoration.none,
-              ),
-              textAlign: TextAlign.center,
-            ),
-          );
-        }
-
-        return ListView.builder(
-          padding: const EdgeInsets.symmetric(vertical: DebugTheme.spacingXs),
-          itemCount: activeLayouts.length,
-          itemBuilder: (context, index) {
-            final layout = activeLayouts[index];
-            // activeLayoutPaths[0] is root, so layout at index 0 corresponds to path at index 1
-            final path = activeLayoutPaths[index + 1];
-            final isDeepest = index == activeLayouts.length - 1;
-
-            return _ActiveLayoutItem(
-              layout: layout,
-              path: path,
-              depth: index,
-              isDeepest: isDeepest,
-            );
-          },
-        );
-      },
-    );
-  }
-}
-
-class _ActiveLayoutItem extends StatelessWidget {
-  const _ActiveLayoutItem({
-    required this.layout,
-    required this.path,
-    required this.depth,
-    required this.isDeepest,
-  });
-
-  final RouteLayout layout;
-  final StackPath path;
-  final int depth;
-  final bool isDeepest;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: DebugTheme.spacingMd,
-        vertical: DebugTheme.spacing,
-      ),
-      decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: DebugTheme.borderDark)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Layout info row
-          Row(
-            children: [
-              // Depth indicator
-              ...List.generate(
-                depth,
-                (_) => Container(
-                  width: 2,
-                  height: 24,
-                  margin: const EdgeInsets.only(right: DebugTheme.spacing),
-                  color: DebugTheme.border,
-                ),
-              ),
-              Icon(
-                isDeepest
-                    ? CupertinoIcons.layers_alt_fill
-                    : CupertinoIcons.layers_alt,
-                color:
-                    isDeepest
-                        ? const Color(0xFF2196F3)
-                        : DebugTheme.textSecondary,
-                size: 16,
-              ),
-              const SizedBox(width: DebugTheme.spacing),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Text(
-                          layout.runtimeType.toString(),
-                          style: TextStyle(
-                            color:
-                                isDeepest
-                                    ? DebugTheme.textPrimary
-                                    : DebugTheme.textSecondary,
-                            fontSize: DebugTheme.fontSizeMd,
-                            fontWeight: FontWeight.w600,
-                            decoration: TextDecoration.none,
-                          ),
-                        ),
-                        if (isDeepest) ...[
-                          const SizedBox(width: DebugTheme.spacing),
-                          const ActiveBadge(),
-                        ],
-                      ],
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'Path: ${path.debugLabel ?? path}',
-                      style: const TextStyle(
-                        color: DebugTheme.textMuted,
-                        fontSize: DebugTheme.fontSize,
-                        decoration: TextDecoration.none,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          // Active route in this path
-          if (path.activeRoute != null)
-            Padding(
-              padding: EdgeInsets.only(
-                left: (depth * (2 + DebugTheme.spacing)) + 24,
-                top: DebugTheme.spacingSm,
-              ),
-              child: Row(
-                children: [
-                  const Icon(
-                    CupertinoIcons.arrow_turn_down_right,
-                    color: DebugTheme.textDisabled,
-                    size: 12,
-                  ),
-                  const SizedBox(width: DebugTheme.spacingXs),
-                  Expanded(
-                    child: Text(
-                      path.activeRoute.toString(),
-                      style: const TextStyle(
-                        color: DebugTheme.textSecondary,
-                        fontSize: DebugTheme.fontSize,
-                        decoration: TextDecoration.none,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-// =============================================================================
-// DEBUG ROUTES LIST VIEW
-// =============================================================================
-
-class _DebugRoutesListView<T extends RouteUnique> extends StatelessWidget {
-  const _DebugRoutesListView({
-    required this.coordinator,
-    required this.onShowToast,
-  });
-
-  final CoordinatorDebug<T> coordinator;
-  final void Function(String message, {ToastType type}) onShowToast;
-
-  @override
-  Widget build(BuildContext context) {
-    if (coordinator.debugRoutes.isEmpty) {
-      return const Center(
-        child: Text(
-          'No debug routes defined.\nOverride debugRoutes in your coordinator.',
-          style: TextStyle(
-            color: DebugTheme.textDisabled,
-            fontSize: DebugTheme.fontSizeMd,
-            decoration: TextDecoration.none,
-          ),
-          textAlign: TextAlign.center,
-        ),
-      );
-    }
-
-    return ListView.builder(
-      padding: const EdgeInsets.symmetric(vertical: DebugTheme.spacingXs),
-      itemCount: coordinator.debugRoutes.length,
-      itemBuilder: (context, index) {
-        final route = coordinator.debugRoutes[index];
-        return _DebugRouteItem<T>(
-          route: route,
-          coordinator: coordinator,
-          onShowToast: onShowToast,
-        );
-      },
-    );
-  }
-}
-
-// =============================================================================
-// DEBUG ROUTE ITEM
-// =============================================================================
-
-class _DebugRouteItem<T extends RouteUnique> extends StatelessWidget {
-  const _DebugRouteItem({
-    required this.route,
-    required this.coordinator,
-    required this.onShowToast,
-  });
-
-  final T route;
-  final CoordinatorDebug<T> coordinator;
-  final void Function(String message, {ToastType type}) onShowToast;
-
-  String get _status {
-    try {
-      return route.toUri().toString();
-    } catch (_) {
-      return 'needs implementation [toUri]';
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: DebugTheme.spacingMd,
-        vertical: DebugTheme.spacingSm,
-      ),
-      decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: DebugTheme.borderDark)),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text.rich(
-              TextSpan(
-                text: route.toString(),
-                style: const TextStyle(
-                  color: DebugTheme.textPrimary,
-                  fontSize: DebugTheme.fontSizeMd,
-                  fontWeight: FontWeight.w400,
-                  decoration: TextDecoration.none,
-                ),
-                children: [
-                  TextSpan(
-                    text: ' $_status',
-                    style: TextStyle(
-                      color: switch (_status) {
-                        'needs implementation [toUri]' => const Color(
-                          0xFFE85600,
-                        ),
-                        _ => DebugTheme.textSecondary,
-                      },
-                      fontSize: DebugTheme.fontSizeMd,
-                      fontWeight: FontWeight.w400,
-                      decoration: TextDecoration.none,
-                    ),
-                  ),
-                ],
-              ),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          const SizedBox(width: DebugTheme.spacingXs),
-          SmallIconButton(
-            icon: CupertinoIcons.add,
-            onTap: () {
-              coordinator.push(route);
-              onShowToast('Pushed $route', type: ToastType.push);
-            },
-          ),
-          const SizedBox(width: DebugTheme.spacingXs),
-          SmallIconButton(
-            icon: CupertinoIcons.arrow_swap,
-            onTap: () {
-              coordinator.replace(route);
-              onShowToast('Replaced with $route', type: ToastType.replace);
-            },
-          ),
-          const SizedBox(width: DebugTheme.spacingXs),
-          SmallIconButton(
-            icon: CupertinoIcons.link,
-            onTap: () {
-              coordinator.recover(route);
-              onShowToast('Recover $route', type: ToastType.replace);
-            },
-          ),
-        ],
-      ),
-    );
   }
 }
