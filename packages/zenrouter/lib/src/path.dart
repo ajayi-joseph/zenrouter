@@ -47,9 +47,8 @@ mixin StackMutatable<T extends RouteTarget> on StackPath<T> {
 
     if (index != -1) {
       final removed = _stack.removeAt(index);
-
-      /// Complete the result future to prevent the route from being popped.
-      removed.completeOnResult(null, null, true);
+      // Dispose the removed route to prevent memory leaks
+      removed.dispose();
     }
     _stack.add(target);
     notifyListeners();
@@ -140,16 +139,17 @@ class NavigationPath<T extends RouteTarget> extends StackPath<T>
   /// Removes a specific route from the stack (at any position).
   ///
   /// Guards are NOT consulted. Use with caution.
+  /// Properly disposes the route to prevent memory leaks.
   void remove(T element) {
-    element._path = null;
     _stack.remove(element);
+    element.dispose();
     notifyListeners();
   }
 
   @override
   void reset() {
     for (final route in _stack) {
-      route.completeOnResult(null, null, true);
+      route.dispose();
     }
     _stack.clear();
   }
@@ -215,7 +215,6 @@ class IndexedStackPath<T extends RouteTarget> extends StackPath<T> {
   @override
   Future<void> activateRoute(T route) async {
     final index = stack.indexOf(route);
-    route.completeOnResult(null, null, true);
     if (index == -1) throw StateError('Route not found');
     await goToIndexed(index);
   }

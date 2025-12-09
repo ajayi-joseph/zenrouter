@@ -169,8 +169,8 @@ mixin RouteRedirect<T extends RouteTarget> on RouteTarget {
       if (newTarget == null) return route;
       if (newTarget == target) break;
       if (newTarget is T) {
-        /// Complete the result future to prevent the route from being popped.
-        target.completeOnResult(null, null, true);
+        // Dispose the redirected-from route to prevent memory leaks
+        target.dispose();
         target = newTarget;
       }
     }
@@ -237,6 +237,15 @@ abstract class RouteTarget extends Object {
   String toString() =>
       '$runtimeType${props.isEmpty ? '' : '[${props.map((p) => p.toString()).join(',')}]'}';
 
+  /// Disposes of this route and cleans up resources.
+  ///
+  /// This ensures the [_onResult] Completer is completed to prevent memory leaks.
+  /// Called when a route is removed from the stack without being properly popped.
+  void dispose() {
+    // Use completeOnResult with failSilent to properly clean up
+    completeOnResult(null, null, true);
+  }
+
   /// Completes the route's result future.
   ///
   /// This is called when the route is popped with a result.
@@ -245,9 +254,11 @@ abstract class RouteTarget extends Object {
     covariant Coordinator? coordinator, [
     bool failSilent = false,
   ]) {
-    if (failSilent && _onResult.isCompleted) {
-      _resultValue = null;
-      _path = null;
+    if (_onResult.isCompleted) {
+      if (failSilent) {
+        _resultValue = null;
+        _path = null;
+      }
       return;
     }
     _onResult.complete(result);
